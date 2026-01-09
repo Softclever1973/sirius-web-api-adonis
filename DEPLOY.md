@@ -7,7 +7,7 @@
 1. **Acesse:** https://github.com
 2. **Clique** no botão **"+"** (canto superior direito) → **"New repository"**
 3. **Preencha:**
-   - Repository name: `sirius-web-api`
+   - Repository name: `sirius-web-api-adonis`
    - Description: `API REST para SIRIUS WEB - ERP Multi-Tenant`
    - Visibilidade: **Private** (recomendado) ou Public
    - **NÃO** marque "Add a README file"
@@ -20,7 +20,7 @@ Abra o terminal na pasta do projeto e execute:
 
 ```bash
 # 1. Navegar até a pasta do projeto
-cd sirius-web-api
+cd c:\Siriusweb\sirius-web-api-adonis
 
 # 2. Criar arquivo .env (se ainda não criou)
 cp .env.example .env
@@ -41,11 +41,11 @@ git commit -m "Initial commit - SIRIUS WEB API"
 
 ### Passo 3: Conectar com GitHub e enviar código
 
-**IMPORTANTE:** Substitua `SEU_USUARIO` pelo seu nome de usuário do GitHub!
+**IMPORTANTE:** Substitua `AdonisEdsonNegri` se for outro usuário!
 
 ```bash
-# 1. Adicionar remote (substitua SEU_USUARIO)
-git remote add origin https://github.com/SEU_USUARIO/sirius-web-api.git
+# 1. Adicionar remote
+git remote add origin https://github.com/AdonisEdsonNegri/sirius-web-api-adonis.git
 
 # 2. Renomear branch para main (padrão GitHub)
 git branch -M main
@@ -67,7 +67,7 @@ git push -u origin main
 
 ### Passo 4: Verificar no GitHub
 
-1. Acesse: `https://github.com/SEU_USUARIO/sirius-web-api`
+1. Acesse: `https://github.com/AdonisEdsonNegri/sirius-web-api-adonis`
 2. Confirme que todos os arquivos estão lá
 3. **IMPORTANTE:** Verifique que o arquivo `.env` **NÃO** está lá (segurança!)
 
@@ -87,14 +87,14 @@ git push -u origin main
 ### Passo 2: Importar projeto
 
 1. Na dashboard do Vercel, clique em **"Add New..."** → **"Project"**
-2. **Procure** por `sirius-web-api` na lista
+2. **Procure** por `sirius-web-api-adonis` na lista
 3. **Clique** em **"Import"**
 
 ### Passo 3: Configurar o projeto
 
 **Na tela de configuração:**
 
-1. **Project Name:** `sirius-web-api` (ou outro nome que preferir)
+1. **Project Name:** `sirius-web-api-adonis` (ou outro nome que preferir)
 
 2. **Framework Preset:** Selecione **"Other"**
 
@@ -111,14 +111,14 @@ git push -u origin main
 
    | NAME | VALUE |
    |------|-------|
-   | `DATABASE_URL` | `postgresql://postgres:SUA_SENHA@SEU_HOST.supabase.co:5432/postgres` |
-   | `JWT_SECRET` | Cole sua chave secreta aqui (resultado do comando crypto) |
+   | `DATABASE_URL` | Cole aqui a connection string COMPLETA do Supabase |
+   | `JWT_SECRET` | Cole sua chave JWT_SECRET do arquivo .env local |
    | `NODE_ENV` | `production` |
    | `JWT_EXPIRES_IN` | `7d` |
 
-   **Como pegar cada valor:**
-   - `DATABASE_URL`: Supabase → Settings → Database → Connection String (URI)
-   - `JWT_SECRET`: Execute no terminal: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"` e copie o resultado
+   **IMPORTANTE:**
+   - `DATABASE_URL`: Copie do seu `.env` local (já está funcionando!)
+   - `JWT_SECRET`: Copie do seu `.env` local (mesma chave!)
 
 6. **Clique** em **"Deploy"**
 
@@ -136,11 +136,11 @@ Quando terminar, você verá:
 ✅ Deployment Ready
 ```
 
-**URL da sua API:** `https://sirius-web-api-xxx.vercel.app`
+**URL da sua API:** `https://sirius-web-api-adonis.vercel.app` (ou similar)
 
 **Teste no navegador:**
 ```
-https://sirius-web-api-xxx.vercel.app/
+https://sirius-web-api-adonis.vercel.app/
 ```
 
 Deve retornar:
@@ -159,62 +159,58 @@ Deve retornar:
 
 ## PARTE 3: Testar Endpoints no Vercel
 
+### Usando Postman (RECOMENDADO)
+
+**Abra sua Collection do Postman e:**
+
+1. **Duplique** todas as requests
+2. **Renomeie** adicionando "- VERCEL" no final
+3. **Substitua** `http://localhost:3000` por `https://sirius-web-api-adonis.vercel.app`
+4. **Teste cada endpoint!**
+
+**Exemplo:**
+- Local: `http://localhost:3000/auth/login`
+- Vercel: `https://sirius-web-api-adonis.vercel.app/auth/login`
+
 ### Usando cURL (Terminal)
 
 **1. Health Check:**
 ```bash
-curl https://sirius-web-api-xxx.vercel.app/
+curl https://sirius-web-api-adonis.vercel.app/
 ```
 
 **2. Registrar empresa:**
 ```bash
-curl -X POST https://sirius-web-api-xxx.vercel.app/auth/register \
+curl -X POST https://sirius-web-api-adonis.vercel.app/auth/register \
   -H "Content-Type: application/json" \
   -d '{
-    "nome": "Adonis",
-    "sobrenome": "Silva",
-    "email": "adonis@teste.com",
+    "nome": "Teste",
+    "sobrenome": "Vercel",
+    "email": "teste@vercel.com",
     "senha": "senha123",
     "celular": "11999999999",
-    "razao_social": "Teste Ltda",
-    "nome_fantasia": "Teste",
-    "cnpj": "12345678901234",
-    "logradouro": "Rua Teste",
-    "numero": "123",
+    "razao_social": "Teste Vercel Ltda",
+    "nome_fantasia": "Teste Vercel",
+    "cnpj": "98765432109876",
+    "logradouro": "Rua Vercel",
+    "numero": "456",
     "bairro": "Centro",
     "uf": "SP",
     "cep": "01234567",
     "telefone": "1133334444",
-    "email_empresa": "contato@teste.com"
+    "email_empresa": "contato@vercel.com"
   }'
 ```
 
 **3. Login:**
 ```bash
-curl -X POST https://sirius-web-api-xxx.vercel.app/auth/login \
+curl -X POST https://sirius-web-api-adonis.vercel.app/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "adonis@teste.com",
+    "email": "teste@vercel.com",
     "senha": "senha123"
   }'
 ```
-
-### Usando Postman ou Insomnia
-
-1. **Importe** a coleção (criar manualmente):
-   - POST `https://sirius-web-api-xxx.vercel.app/auth/register`
-   - POST `https://sirius-web-api-xxx.vercel.app/auth/login`
-   - GET `https://sirius-web-api-xxx.vercel.app/auth/me`
-
-2. **Configure** Headers:
-   ```
-   Content-Type: application/json
-   ```
-
-3. **Para rotas autenticadas**, adicione:
-   ```
-   Authorization: Bearer SEU_TOKEN_AQUI
-   ```
 
 ---
 
@@ -273,6 +269,7 @@ O Vercel detecta mudanças no GitHub e faz deploy automaticamente!
 1. Verifique se `DATABASE_URL` está correta no Vercel
 2. Confirme que a senha do Supabase está certa
 3. Verifique se o projeto Supabase está ativo
+4. **IMPORTANTE:** Use a MESMA connection string que funciona local!
 
 ### Erro: "Module not found"
 
@@ -287,16 +284,18 @@ O Vercel detecta mudanças no GitHub e faz deploy automaticamente!
 - `JWT_SECRET` no Vercel deve ser exatamente igual ao do desenvolvimento
 - Se mudou o secret, usuários precisam fazer login novamente
 
+### Erro: "This Serverless Function has crashed"
+
+**Solução:**
+1. Vá em Deployments → Última → Function Logs
+2. Veja o erro específico
+3. Geralmente é problema na `DATABASE_URL` ou `JWT_SECRET`
+
 ### Git pede senha toda hora
 
 **Solução:**
 ```bash
-# Usar SSH ao invés de HTTPS
-git remote set-url origin git@github.com:SEU_USUARIO/sirius-web-api.git
-```
-
-Ou configurar credential helper:
-```bash
+# Configurar credential helper
 git config --global credential.helper cache
 ```
 
@@ -327,19 +326,22 @@ Antes de considerar concluído:
 ## 🎯 Resumo Executivo (Cola)
 
 ```bash
-# GitHub
+# GitHub (JÁ FEITO! ✅)
 git init
 git add .
-git commit -m "Initial commit"
-git remote add origin https://github.com/SEU_USUARIO/sirius-web-api.git
+git commit -m "Initial commit - SIRIUS WEB API"
+git remote add origin https://github.com/AdonisEdsonNegri/sirius-web-api-adonis.git
 git branch -M main
 git push -u origin main
 
-# Vercel
+# Vercel (FAZER AGORA!)
 1. Acesse vercel.com
-2. Import projeto do GitHub
-3. Configure variáveis de ambiente
-4. Deploy!
+2. Continue with GitHub
+3. Import sirius-web-api-adonis
+4. Configure variáveis (DATABASE_URL e JWT_SECRET do .env local)
+5. Deploy!
+6. Aguardar 2 minutos
+7. Testar: https://sirius-web-api-adonis.vercel.app/
 ```
 
 **Pronto! API no ar! 🚀**
