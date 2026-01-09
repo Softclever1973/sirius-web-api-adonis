@@ -1,0 +1,28 @@
+{
+  "name": "sirius-web-api",
+  "version": "1.0.0",
+  "description": "API REST para SIRIUS WEB - ERP Multi-Tenant com NFCe",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "erp",
+    "nfce",
+    "multi-tenant",
+    "pdv"
+  ],
+  "author": "Adonis",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "pg": "^8.11.3",
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1"
+  }
+}
