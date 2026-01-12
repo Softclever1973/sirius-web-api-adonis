@@ -1,5 +1,6 @@
 // =====================================================
 // Configuração do Banco de Dados PostgreSQL
+// Otimizado para Vercel Serverless
 // =====================================================
 
 // IMPORTANTE: Carregar .env ANTES de importar pg
@@ -13,16 +14,22 @@ const { Pool } = pg;
 console.log('🔍 DATABASE_URL configurada:', process.env.DATABASE_URL ? 'SIM' : 'NÃO');
 console.log('🔍 Host:', process.env.DATABASE_URL?.split('@')[1]?.split(':')[0] || 'INDEFINIDO');
 
-// Criar pool de conexões
-const pool = new Pool({
+// Configuração otimizada para serverless
+const poolConfig = {
   connectionString: process.env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
   },
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-});
+  // AJUSTES PARA VERCEL SERVERLESS
+  max: 1, // Apenas 1 conexão por função serverless
+  idleTimeoutMillis: 1000, // Fechar conexões ociosas rapidamente
+  connectionTimeoutMillis: 5000, // Timeout de conexão: 5 segundos
+  allowExitOnIdle: true, // Permitir que o processo termine
+  statement_timeout: 10000, // Timeout de query: 10 segundos
+};
+
+// Criar pool de conexões
+const pool = new Pool(poolConfig);
 
 // Testar conexão ao iniciar
 pool.on('connect', () => {
@@ -31,43 +38,52 @@ pool.on('connect', () => {
 
 pool.on('error', (err) => {
   console.error('❌ Erro no pool do PostgreSQL:', err);
-  process.exit(-1);
 });
 
-// Helper para queries
+// Helper para queries com timeout
 export const query = async (text, params) => {
   const start = Date.now();
+  const client = await pool.connect();
+  
   try {
-    const result = await pool.query(text, params);
+    const result = await client.query(text, params);
     const duration = Date.now() - start;
     
     if (process.env.NODE_ENV === 'development') {
-      console.log('📊 Query executada:', { text, duration: `${duration}ms`, rows: result.rowCount });
+      console.log('📊 Query executada:', { text: text.substring(0, 50), duration: `${duration}ms`, rows: result.rowCount });
     }
     
     return result;
   } catch (error) {
-    console.error('❌ Erro na query:', error);
+    console.error('❌ Erro na query:', error.message);
     throw error;
+  } finally {
+    client.release();
   }
 };
 
-// Helper para transações
+// Helper para transações com timeout
 export const getClient = async () => {
   const client = await pool.connect();
   
-  const query = client.query.bind(client);
-  const release = client.release.bind(client);
+  const originalQuery = client.query.bind(client);
+  const originalRelease = client.release.bind(client);
   
+  // Timeout de segurança
   const timeout = setTimeout(() => {
-    console.error('❌ Cliente do banco não foi liberado após 5 segundos!');
-  }, 5000);
+    console.error('❌ Cliente do banco não foi liberado após 10 segundos!');
+    client.release();
+  }, 10000);
   
+  // Sobrescrever release para limpar timeout
   client.release = () => {
     clearTimeout(timeout);
-    client.release = release;
-    return release();
+    client.release = originalRelease;
+    return originalRelease();
   };
+  
+  // Manter query original
+  client.query = originalQuery;
   
   return client;
 };
@@ -76,5 +92,11 @@ export const getClient = async () => {
 export const setEmpresaId = async (client, empresaId) => {
   await client.query('SET LOCAL app.current_empresa_id = $1', [empresaId]);
 };
+
+// Cleanup ao encerrar (importante para serverless)
+process.on('SIGTERM', async () => {
+  console.log('🛑 SIGTERM recebido, encerrando pool...');
+  await pool.end();
+});
 
 export default pool;
