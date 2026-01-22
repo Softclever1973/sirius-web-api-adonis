@@ -11,6 +11,7 @@ import authRoutes from './routes/auth.routes.js';
 import empresasRoutes from './routes/empresas.routes.js';
 import produtosRoutes from './routes/produtos.routes.js';
 import clientesRoutes from './routes/clientes.routes.js';
+import movimentacoesRoutes from './routes/movimentacoes.routes.js';
 
 // Configurar variáveis de ambiente
 dotenv.config();
@@ -67,6 +68,9 @@ app.use('/produtos', produtosRoutes);
 
 // Rotas de clientes
 app.use('/clientes', clientesRoutes);
+
+// Rotas de movimentações
+app.use('/movimentacoes', movimentacoesRoutes);
 
 // =====================================================
 // TRATAMENTO DE ERROS

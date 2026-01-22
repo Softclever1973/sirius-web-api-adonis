@@ -303,7 +303,7 @@ export const criarProduto = async (req, res) => {
         unidade || 'UN',
         preco_custo || 0,
         preco_venda || 0,
-        estoque_atual || 0,
+        0, // ✅ Saldo sempre inicia em ZERO - será ajustado via movimentações
         estoque_minimo || 0,
         estoque_maximo || 0,
         ncm || null,
@@ -380,6 +380,8 @@ export const atualizarProduto = async (req, res) => {
     let paramCounter = 1;
     
     // Mapear campos do body para campos do banco
+    // IMPORTANTE: estoque_atual (saldo) foi removido do mapeamento
+    // O saldo só pode ser atualizado via movimentações de estoque
     const mapeamento = {
       'codigo': 'codigo',
       'codigo_barras': 'ean',
@@ -388,7 +390,7 @@ export const atualizarProduto = async (req, res) => {
       'unidade': 'unidade_comercial',
       'preco_custo': 'custo',
       'preco_venda': 'valor_venda',
-      'estoque_atual': 'saldo',
+      // 'estoque_atual': 'saldo', // ❌ REMOVIDO - saldo não é mais editável aqui
       'estoque_minimo': 'estoque_minimo',
       'estoque_maximo': 'estoque_maximo',
       'ncm': 'ncm',
