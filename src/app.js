@@ -7,11 +7,11 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 
 // Importar rotas
-import authRoutes from './routes/auth.routes.js';
-import empresasRoutes from './routes/empresas.routes.js';
-import produtosRoutes from './routes/produtos.routes.js';
-import clientesRoutes from './routes/clientes.routes.js';
-import movimentacoesRoutes from './routes/movimentacoes.routes.js';
+import authRoutes from './routes/auth-routes.js';
+import empresasRoutes from './routes/empresas-routes.js';
+import produtosRoutes from './routes/produtos-routes.js';
+import clientesRoutes from './routes/clientes-routes.js';
+import movimentacoesRoutes from './routes/movimentacoes-routes.js';
 
 // Configurar variáveis de ambiente
 dotenv.config();

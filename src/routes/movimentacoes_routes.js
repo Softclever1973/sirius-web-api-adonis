@@ -6,9 +6,9 @@ import express from 'express';
 import {
   listarMovimentacoes,
   criarMovimentacao
-} from '../controllers/movimentacoes.controller.js';
-import { authenticateToken } from '../middlewares/auth.middleware.js';
-import { setTenant } from '../middlewares/tenant.middleware.js';
+} from '../controllers/movimentacoes_controller.js';
+import { authenticateToken } from '../middlewares/auth_middleware.js';
+import { setTenant } from '../middlewares/tenant_middleware.js';
 
 const router = express.Router();
 
