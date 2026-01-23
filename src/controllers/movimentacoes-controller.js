@@ -124,6 +124,8 @@ export const criarMovimentacao = async (req, res) => {
     const produtoId = req.params.produtoId;
     const { tipo, quantidade, observacao } = req.body;
     
+    console.log('📝 Criando movimentação:', { empresaId, usuarioId, produtoId, tipo, quantidade });
+    
     // Validações
     if (!tipo || !['ENTRADA', 'SAIDA'].includes(tipo)) {
       return res.status(400).json({
@@ -160,6 +162,8 @@ export const criarMovimentacao = async (req, res) => {
     const saldoAnterior = parseFloat(produto.saldo);
     const qtd = parseFloat(quantidade);
     
+    console.log('📦 Produto encontrado:', { id: produto.id_produto, saldo: saldoAnterior });
+    
     // Calcular novo saldo
     let saldoAtual;
     if (tipo === 'ENTRADA') {
@@ -176,6 +180,8 @@ export const criarMovimentacao = async (req, res) => {
         });
       }
     }
+    
+    console.log('💰 Saldos:', { anterior: saldoAnterior, atual: saldoAtual });
     
     // Inserir movimentação
     const movResult = await client.query(
@@ -194,6 +200,7 @@ export const criarMovimentacao = async (req, res) => {
     );
     
     const movimentacao = movResult.rows[0];
+    console.log('✅ Movimentação inserida:', movimentacao.id_movimentacao);
     
     // Atualizar saldo do produto
     await client.query(
@@ -201,8 +208,11 @@ export const criarMovimentacao = async (req, res) => {
       [saldoAtual, produtoId, empresaId]
     );
     
+    console.log('✅ Saldo do produto atualizado');
+    
     // Commit da transação
     await client.query('COMMIT');
+    console.log('✅ Transação commitada');
     
     // Buscar nome do usuário para retorno
     const usuarioResult = await query(
@@ -212,7 +222,7 @@ export const criarMovimentacao = async (req, res) => {
     
     const usuario = usuarioResult.rows[0];
     
-    res.status(201).json({
+    const resposta = {
       success: true,
       message: `${tipo === 'ENTRADA' ? 'Entrada' : 'Saída'} registrada com sucesso`,
       data: {
@@ -229,14 +239,20 @@ export const criarMovimentacao = async (req, res) => {
           descricao: produto.descricao
         }
       }
-    });
+    };
+    
+    console.log('📤 Enviando resposta:', resposta);
+    
+    res.status(201).json(resposta);
     
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('Erro ao criar movimentação:', error);
+    console.error('❌ Erro ao criar movimentação:', error);
+    console.error('❌ Stack:', error.stack);
     res.status(500).json({
       success: false,
-      message: 'Erro ao criar movimentação'
+      message: 'Erro ao criar movimentação',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
     client.release();
