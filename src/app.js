@@ -12,6 +12,7 @@ import empresasRoutes from './routes/empresas-routes.js';
 import produtosRoutes from './routes/produtos-routes.js';
 import clientesRoutes from './routes/clientes-routes.js';
 import movimentacoesRoutes from './routes/movimentacoes-routes.js';
+import vendedoresRoutes from './routes/vendedores-routes.js';
 
 // Configurar variáveis de ambiente
 dotenv.config();
@@ -72,6 +73,8 @@ app.use('/clientes', clientesRoutes);
 // Rotas de movimentações
 app.use('/movimentacoes', movimentacoesRoutes);
 
+// Rotas de vendedores
+app.use('/vendedores', vendedoresRoutes);
 // =====================================================
 // TRATAMENTO DE ERROS
 // =====================================================

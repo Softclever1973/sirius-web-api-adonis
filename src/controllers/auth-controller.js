@@ -157,6 +157,43 @@ export const register = async (req, res) => {
       );
     }
     
+    // 5. Criar sequence para vendedores (se não existir)
+    await client.query(`
+      CREATE SEQUENCE IF NOT EXISTS vendedores_id_vendedor_seq;
+    `);
+    
+    // 6. Criar tabela vendedores (se não existir)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS vendedores (
+        id_vendedor integer NOT NULL DEFAULT nextval('vendedores_id_vendedor_seq'::regclass),
+        id_empresa integer NOT NULL,
+        nome text NOT NULL,
+        cpf character varying,
+        fone character varying,
+        email text,
+        endereco text,
+        complemento text,
+        cidade text,
+        uf character varying(2),
+        cep character varying,
+        comissao numeric,
+        meta_vendas numeric,
+        status character DEFAULT 'A'::bpchar CHECK (status = ANY (ARRAY['A'::bpchar, 'I'::bpchar])),
+        observacoes text,
+        created_at timestamp without time zone DEFAULT now(),
+        updated_at timestamp without time zone DEFAULT now(),
+        CONSTRAINT vendedores_pkey PRIMARY KEY (id_vendedor),
+        CONSTRAINT vendedores_id_empresa_fkey FOREIGN KEY (id_empresa) REFERENCES empresas(id_empresa)
+      );
+    `);
+    
+    // 7. Criar índices para vendedores (se não existirem)
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_vendedores_id_empresa ON vendedores(id_empresa);
+      CREATE INDEX IF NOT EXISTS idx_vendedores_status ON vendedores(status);
+      CREATE INDEX IF NOT EXISTS idx_vendedores_nome ON vendedores(nome);
+    `);
+    
     // Commit da transação
     await client.query('COMMIT');
     

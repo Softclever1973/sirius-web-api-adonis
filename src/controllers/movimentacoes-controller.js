@@ -1,26 +1,26 @@
 // =====================================================
-// SIRIUS WEB API - Controller de Movimentações de Estoque
+// SIRIUS WEB API - Controller de Movimentacoes de Estoque
 // =====================================================
 
 import { query, getClient } from '../config/database.js';
 
 // =====================================================
-// LISTAR MOVIMENTAÇÕES (com paginação)
+// LISTAR MOVIMENTACOES (com paginacao)
 // =====================================================
 export const listarMovimentacoes = async (req, res) => {
   try {
     const empresaId = req.empresa.id;
     const produtoId = req.params.produtoId;
     
-    // Parâmetros de paginação
+    // Parametros de paginacao
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
     
-    // Parâmetro de ordenação
+    // Parametro de ordenacao
     const orderDir = req.query.orderDir === 'desc' ? 'DESC' : 'ASC';
     
-    // Verificar se produto existe e pertence à empresa
+    // Verificar se produto existe e pertence a empresa
     const produtoExiste = await query(
       'SELECT id_produto, descricao, saldo FROM produtos WHERE id_produto = $1 AND id_empresa = $2',
       [produtoId, empresaId]
@@ -29,7 +29,7 @@ export const listarMovimentacoes = async (req, res) => {
     if (produtoExiste.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Produto não encontrado'
+        message: 'Produto nao encontrado'
       });
     }
     
@@ -68,7 +68,7 @@ export const listarMovimentacoes = async (req, res) => {
     
     const dataResult = await query(dataQuery, [empresaId, produtoId, limit, offset]);
     
-    // Calcular metadados de paginação
+    // Calcular metadados de paginacao
     const totalPages = Math.ceil(total / limit);
     
     res.json({
@@ -104,16 +104,16 @@ export const listarMovimentacoes = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Erro ao listar movimentações:', error);
+    console.error('Erro ao listar movimentacoes:', error);
     res.status(500).json({
       success: false,
-      message: 'Erro ao listar movimentações'
+      message: 'Erro ao listar movimentacoes'
     });
   }
 };
 
 // =====================================================
-// CRIAR MOVIMENTAÇÃO (Entrada ou Saída)
+// CRIAR MOVIMENTACAO (Entrada ou Saida)
 // =====================================================
 export const criarMovimentacao = async (req, res) => {
   const client = await getClient();
@@ -124,13 +124,13 @@ export const criarMovimentacao = async (req, res) => {
     const produtoId = req.params.produtoId;
     const { tipo, quantidade, observacao } = req.body;
     
-    console.log('📝 Criando movimentação:', { empresaId, usuarioId, produtoId, tipo, quantidade });
+    console.log('[LOG] Criando movimentacao:', { empresaId, usuarioId, produtoId, tipo, quantidade });
     
-    // Validações
+    // Validacoes
     if (!tipo || !['ENTRADA', 'SAIDA'].includes(tipo)) {
       return res.status(400).json({
         success: false,
-        message: 'Tipo inválido. Use ENTRADA ou SAIDA'
+        message: 'Tipo invalido. Use ENTRADA ou SAIDA'
       });
     }
     
@@ -141,8 +141,9 @@ export const criarMovimentacao = async (req, res) => {
       });
     }
     
-    // Iniciar transação
+    // Iniciar transacao
     await client.query('BEGIN');
+    console.log('[LOG] Transacao iniciada');
     
     // Buscar produto com lock para evitar race condition
     const produtoResult = await client.query(
@@ -152,9 +153,10 @@ export const criarMovimentacao = async (req, res) => {
     
     if (produtoResult.rows.length === 0) {
       await client.query('ROLLBACK');
+      console.log('[ERRO] Produto nao encontrado');
       return res.status(404).json({
         success: false,
-        message: 'Produto não encontrado'
+        message: 'Produto nao encontrado'
       });
     }
     
@@ -162,7 +164,7 @@ export const criarMovimentacao = async (req, res) => {
     const saldoAnterior = parseFloat(produto.saldo);
     const qtd = parseFloat(quantidade);
     
-    console.log('📦 Produto encontrado:', { id: produto.id_produto, saldo: saldoAnterior });
+    console.log('[LOG] Produto encontrado:', { id: produto.id_produto, descricao: produto.descricao, saldo: saldoAnterior });
     
     // Calcular novo saldo
     let saldoAtual;
@@ -171,9 +173,10 @@ export const criarMovimentacao = async (req, res) => {
     } else {
       saldoAtual = saldoAnterior - qtd;
       
-      // Validar se há saldo suficiente
+      // Validar se ha saldo suficiente
       if (saldoAtual < 0) {
         await client.query('ROLLBACK');
+        console.log('[ERRO] Saldo insuficiente');
         return res.status(400).json({
           success: false,
           message: `Saldo insuficiente. Saldo atual: ${saldoAnterior}, Quantidade solicitada: ${qtd}`
@@ -181,9 +184,9 @@ export const criarMovimentacao = async (req, res) => {
       }
     }
     
-    console.log('💰 Saldos:', { anterior: saldoAnterior, atual: saldoAtual });
+    console.log('[LOG] Saldos calculados:', { anterior: saldoAnterior, atual: saldoAtual });
     
-    // Inserir movimentação
+    // Inserir movimentacao
     const movResult = await client.query(
       `INSERT INTO movimentacoes_estoque (
         id_empresa,
@@ -200,7 +203,7 @@ export const criarMovimentacao = async (req, res) => {
     );
     
     const movimentacao = movResult.rows[0];
-    console.log('✅ Movimentação inserida:', movimentacao.id_movimentacao);
+    console.log('[SUCESSO] Movimentacao inserida:', { id: movimentacao.id_movimentacao });
     
     // Atualizar saldo do produto
     await client.query(
@@ -208,14 +211,14 @@ export const criarMovimentacao = async (req, res) => {
       [saldoAtual, produtoId, empresaId]
     );
     
-    console.log('✅ Saldo do produto atualizado');
+    console.log('[SUCESSO] Saldo do produto atualizado');
     
-    // Commit da transação
+    // Commit da transacao
     await client.query('COMMIT');
-    console.log('✅ Transação commitada');
+    console.log('[SUCESSO] Transacao commitada');
     
-    // Buscar nome do usuário para retorno
-    const usuarioResult = await query(
+    // Buscar nome do usuario para retorno (usando o mesmo client)
+    const usuarioResult = await client.query(
       'SELECT nome, sobrenome FROM usuarios WHERE id_usuario = $1',
       [usuarioId]
     );
@@ -224,7 +227,7 @@ export const criarMovimentacao = async (req, res) => {
     
     const resposta = {
       success: true,
-      message: `${tipo === 'ENTRADA' ? 'Entrada' : 'Saída'} registrada com sucesso`,
+      message: `${tipo === 'ENTRADA' ? 'Entrada' : 'Saida'} registrada com sucesso`,
       data: {
         id: movimentacao.id_movimentacao,
         tipo,
@@ -241,20 +244,21 @@ export const criarMovimentacao = async (req, res) => {
       }
     };
     
-    console.log('📤 Enviando resposta:', resposta);
+    console.log('[RESPOSTA] Enviando resposta de sucesso');
     
     res.status(201).json(resposta);
     
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('❌ Erro ao criar movimentação:', error);
-    console.error('❌ Stack:', error.stack);
+    console.error('[ERRO CRITICO] Erro ao criar movimentacao:', error.message);
+    console.error('[ERRO CRITICO] Stack:', error.stack);
     res.status(500).json({
       success: false,
-      message: 'Erro ao criar movimentação',
+      message: 'Erro ao criar movimentacao',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
     client.release();
+    console.log('[LOG] Cliente liberado');
   }
 };
