@@ -13,6 +13,10 @@ import produtosRoutes from './routes/produtos-routes.js';
 import clientesRoutes from './routes/clientes-routes.js';
 import movimentacoesRoutes from './routes/movimentacoes-routes.js';
 import vendedoresRoutes from './routes/vendedores-routes.js';
+import formasPagamentoRoutes from './routes/formas-pagamento-routes.js';
+import regimesTributariosRoutes from './routes/regimes-tributarios-routes.js';
+import pdvRoutes from './routes/pdv-routes.js';
+import pedidosRoutes from './routes/pedidos-routes.js';
 
 // Configurar variáveis de ambiente
 dotenv.config();
@@ -26,7 +30,7 @@ const app = express();
 
 // CORS - Permitir requisições de outros domínios
 app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
+  origin: true, // Aceita qualquer origem automaticamente
   credentials: true
 }));
 
@@ -39,7 +43,7 @@ app.use(express.urlencoded({ extended: true }));
 // Log de requisições (apenas em desenvolvimento)
 if (process.env.NODE_ENV === 'development') {
   app.use((req, res, next) => {
-    console.log(`📨 ${req.method} ${req.path}`);
+    console.log(`🔨 ${req.method} ${req.path}`);
     next();
   });
 }
@@ -75,6 +79,19 @@ app.use('/movimentacoes', movimentacoesRoutes);
 
 // Rotas de vendedores
 app.use('/vendedores', vendedoresRoutes);
+
+// Rotas de formas de pagamento
+app.use('/formas-pagamento', formasPagamentoRoutes);
+
+// Rotas de regimes tributários
+app.use('/regimes-tributarios', regimesTributariosRoutes);
+
+// Rotas de PDV
+app.use('/pdv', pdvRoutes);
+
+// Rotas de Pedidos (Consulta)
+app.use('/pdv', pedidosRoutes);
+
 // =====================================================
 // TRATAMENTO DE ERROS
 // =====================================================

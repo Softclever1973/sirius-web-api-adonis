@@ -10,7 +10,19 @@ import { query } from '../config/database.js';
  */
 export const listarVendedores = async (req, res) => {
   try {
-    const idEmpresa = req.empresaId;
+    // Buscar id_empresa de múltiplas fontes possíveis
+    const idEmpresa = req.empresaId || req.empresa?.id || req.user?.id_empresa;
+    
+    // Debug
+    console.log('🔍 [listarVendedores] ID Empresa:', idEmpresa);
+    
+    if (!idEmpresa) {
+      console.error('❌ ID da empresa não encontrado!');
+      return res.status(400).json({
+        success: false,
+        message: 'Erro ao identificar empresa'
+      });
+    }
     
     const result = await query(
       `SELECT 
@@ -58,7 +70,20 @@ export const listarVendedores = async (req, res) => {
 export const buscarVendedor = async (req, res) => {
   try {
     const { id } = req.params;
-    const idEmpresa = req.empresaId;
+    
+    // Buscar id_empresa de múltiplas fontes possíveis
+    const idEmpresa = req.empresaId || req.empresa?.id || req.user?.id_empresa;
+    
+    // Debug
+    console.log('🔍 [buscarVendedor] ID Empresa:', idEmpresa);
+    
+    if (!idEmpresa) {
+      console.error('❌ ID da empresa não encontrado!');
+      return res.status(400).json({
+        success: false,
+        message: 'Erro ao identificar empresa'
+      });
+    }
     
     const result = await query(
       `SELECT 
@@ -111,7 +136,25 @@ export const buscarVendedor = async (req, res) => {
  */
 export const criarVendedor = async (req, res) => {
   try {
-    const idEmpresa = req.empresaId;
+    // Buscar id_empresa de múltiplas fontes possíveis
+    const idEmpresa = req.empresaId || req.empresa?.id || req.user?.id_empresa;
+    
+    // Debug detalhado
+    console.log('🔍 [criarVendedor] Debug completo:');
+    console.log('   req.empresaId:', req.empresaId);
+    console.log('   req.empresa:', req.empresa);
+    console.log('   req.user:', req.user);
+    console.log('   ID Empresa final:', idEmpresa);
+    
+    // Validação crítica
+    if (!idEmpresa) {
+      console.error('❌ ID da empresa não encontrado!');
+      return res.status(400).json({
+        success: false,
+        message: 'Erro ao identificar empresa. Verifique a autenticação.'
+      });
+    }
+    
     const {
       nome,
       cpf,
@@ -150,6 +193,8 @@ export const criarVendedor = async (req, res) => {
       });
     }
     
+    console.log('✅ Validações OK. Inserindo vendedor com id_empresa:', idEmpresa);
+    
     // Inserir vendedor
     const result = await query(
       `INSERT INTO vendedores (
@@ -187,6 +232,8 @@ export const criarVendedor = async (req, res) => {
       ]
     );
     
+    console.log('✅ Vendedor criado com sucesso! ID:', result.rows[0].id_vendedor);
+    
     return res.status(201).json({
       success: true,
       message: 'Vendedor criado com sucesso',
@@ -194,7 +241,7 @@ export const criarVendedor = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Erro ao criar vendedor:', error);
+    console.error('❌ Erro ao criar vendedor:', error);
     return res.status(500).json({
       success: false,
       message: 'Erro ao criar vendedor'
@@ -209,7 +256,21 @@ export const criarVendedor = async (req, res) => {
 export const atualizarVendedor = async (req, res) => {
   try {
     const { id } = req.params;
-    const idEmpresa = req.empresaId;
+    
+    // Buscar id_empresa de múltiplas fontes possíveis
+    const idEmpresa = req.empresaId || req.empresa?.id || req.user?.id_empresa;
+    
+    // Debug
+    console.log('🔍 [atualizarVendedor] ID Empresa:', idEmpresa);
+    
+    if (!idEmpresa) {
+      console.error('❌ ID da empresa não encontrado!');
+      return res.status(400).json({
+        success: false,
+        message: 'Erro ao identificar empresa'
+      });
+    }
+    
     const {
       nome,
       cpf,
@@ -301,7 +362,20 @@ export const atualizarVendedor = async (req, res) => {
 export const excluirVendedor = async (req, res) => {
   try {
     const { id } = req.params;
-    const idEmpresa = req.empresaId;
+    
+    // Buscar id_empresa de múltiplas fontes possíveis
+    const idEmpresa = req.empresaId || req.empresa?.id || req.user?.id_empresa;
+    
+    // Debug
+    console.log('🔍 [excluirVendedor] ID Empresa:', idEmpresa);
+    
+    if (!idEmpresa) {
+      console.error('❌ ID da empresa não encontrado!');
+      return res.status(400).json({
+        success: false,
+        message: 'Erro ao identificar empresa'
+      });
+    }
     
     const result = await query(
       `DELETE FROM vendedores 
