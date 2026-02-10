@@ -205,7 +205,7 @@ export const listarFormasPagamento = async (req, res) => {
 };
 
 // =====================================================
-// OBTER PRÃ“XIMO NÃšMERO DE PEDIDO
+// OBTER PRÃƒâ€œXIMO NÃƒÅ¡MERO DE PEDIDO
 // =====================================================
 export const obterProximoNumero = async (req, res) => {
   try {
@@ -249,7 +249,7 @@ const validarEstoque = async (empresaId, itens) => {
     const result = await query(sql, [empresaId, item.id_produto]);
     
     if (result.rows.length === 0) {
-      throw new Error(`Produto ${item.descricao} nÃ£o encontrado`);
+      throw new Error(`Produto ${item.descricao} não encontrado`);
     }
     
     const saldoAtual = parseFloat(result.rows[0].saldo);
@@ -325,7 +325,7 @@ const darBaixaEstoque = async (empresaId, usuarioId, pedidoId, itens) => {
 export const finalizarPedido = async (req, res) => {
   try {
     const empresaId = req.empresa.id;
-    const usuarioId = req.user.id; // â† CORRIGIDO: req.user ao invÃ©s de req.usuario
+    const usuarioId = req.user.id; // Ã¢â€ Â CORRIGIDO: req.user ao invés de req.usuario
     const {
       numero,
       cliente,
@@ -342,7 +342,7 @@ export const finalizarPedido = async (req, res) => {
     if (!cliente || !cliente.id) {
       return res.status(400).json({
         success: false,
-        message: 'Cliente nÃ£o informado'
+        message: 'Cliente não informado'
       });
     }
     
@@ -360,12 +360,21 @@ export const finalizarPedido = async (req, res) => {
       });
     }
     
-    // Validar se o total dos pagamentos confere
-    const totalPago = pagamentos.reduce((sum, p) => sum + parseFloat(p.valor), 0);
-    if (Math.abs(totalPago - parseFloat(valor_liquido)) > 0.01) {
+    // Validar se o total dos pagamentos confere (DESCONTANDO O TROCO)
+    const totalPago = pagamentos.reduce((sum, p) => {
+      const valor = parseFloat(p.valor) || 0;
+      const troco = parseFloat(p.troco) || 0;
+      return sum + (valor - troco);
+    }, 0);
+    
+    // Arredondar para evitar erros de ponto flutuante
+    const totalPagoArredondado = Math.round(totalPago * 100) / 100;
+    const valorLiquidoArredondado = Math.round(parseFloat(valor_liquido) * 100) / 100;
+    
+    if (Math.abs(totalPagoArredondado - valorLiquidoArredondado) > 0.01) {
       return res.status(400).json({
         success: false,
-        message: 'Total dos pagamentos nÃ£o confere com o valor do pedido'
+        message: 'Total dos pagamentos não confere com o valor do pedido'
       });
     }
     
@@ -520,7 +529,7 @@ export const listarPedidos = async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
     
-    // Parâmetros de filtro
+    // ParÃ¢metros de filtro
     const ordenacao = req.query.ordenacao || 'numero_desc';
     const filtroPorNumero = req.query.numero;
     const filtroHoje = req.query.hoje === 'true';
@@ -532,7 +541,7 @@ export const listarPedidos = async (req, res) => {
     let params = [empresaId];
     let paramCount = 1;
     
-    // Filtro por número
+    // Filtro por nÃºmero
     if (filtroPorNumero) {
       paramCount++;
       whereConditions.push(`p.numero = $${paramCount}`);
@@ -560,8 +569,8 @@ export const listarPedidos = async (req, res) => {
     
     const whereClause = whereConditions.join(' AND ');
     
-    // Definir ordenação
-    let orderClause = 'p.id_pedido_venda DESC'; // padrão
+    // Definir ordenaÃ§Ã£o
+    let orderClause = 'p.id_pedido_venda DESC'; // padrÃ£o
     if (ordenacao === 'numero_asc') {
       orderClause = 'p.numero ASC';
     } else if (ordenacao === 'numero_desc') {
@@ -650,7 +659,7 @@ export const buscarPedido = async (req, res) => {
     if (pedidoResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Pedido nÃ£o encontrado'
+        message: 'Pedido não encontrado'
       });
     }
     
