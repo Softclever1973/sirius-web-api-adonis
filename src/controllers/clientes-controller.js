@@ -1,5 +1,6 @@
 // =====================================================
 // SIRIUS WEB API - Controller de Clientes
+// VERSÃO CORRIGIDA - Consumidor Final + Status
 // =====================================================
 
 import { query } from '../config/database.js';
@@ -172,7 +173,7 @@ export const buscarCliente = async (req, res) => {
 };
 
 // =====================================================
-// CRIAR CLIENTE
+// CRIAR CLIENTE - ✅ CORRIGIDO COM CONSUMIDOR FINAL
 // =====================================================
 export const criarCliente = async (req, res) => {
   try {
@@ -211,8 +212,12 @@ export const criarCliente = async (req, res) => {
       });
     }
     
-    // Validar CPF ou CNPJ dependendo do tipo
-    if (tipo === 'F' && !cpf) {
+    // ✅ VALIDAÇÃO ESPECIAL PARA CONSUMIDOR FINAL
+    const razaoSocialUpper = razao_social.trim().toUpperCase();
+    const isConsumidorFinal = (razaoSocialUpper === 'CONSUMIDOR FINAL');
+    
+    // Validar CPF (Pessoa Física) - EXCETO para "Consumidor Final"
+    if (tipo === 'F' && !isConsumidorFinal && !cpf) {
       return res.status(400).json({
         success: false,
         message: 'CPF é obrigatório para Pessoa Física'
@@ -224,6 +229,11 @@ export const criarCliente = async (req, res) => {
         success: false,
         message: 'CNPJ é obrigatório para Pessoa Jurídica'
       });
+    }
+    
+    // Log para debug
+    if (isConsumidorFinal) {
+      console.log('🎯 CONSUMIDOR FINAL detectado no BACKEND - CPF não obrigatório');
     }
     
     // Verificar se CPF/CNPJ já existe
@@ -301,18 +311,18 @@ export const criarCliente = async (req, res) => {
         empresaId,
         tipo,
         razao_social,
-        nome_fantasia || null,
-        cpf || null,
-        cnpj || null,
-        id_estrangeiro || null,
-        indicador_ie || null,
-        inscricao_estadual || null,
-        inscricao_municipal || null,
-        contato || null,
-        nome_contato || null,
-        id_vendedor || null,
-        id_lista_preco || null,
-        id_condicao_pagamento || null,
+        nome_fantasia,
+        cpf,
+        cnpj,
+        id_estrangeiro,
+        indicador_ie,
+        inscricao_estadual,
+        inscricao_municipal,
+        contato,
+        nome_contato,
+        id_vendedor,
+        id_lista_preco,
+        id_condicao_pagamento,
         status
       ]
     );
@@ -327,13 +337,14 @@ export const criarCliente = async (req, res) => {
     console.error('Erro ao criar cliente:', error);
     res.status(500).json({
       success: false,
-      message: 'Erro ao criar cliente'
+      message: 'Erro ao criar cliente',
+      error: error.message
     });
   }
 };
 
 // =====================================================
-// ATUALIZAR CLIENTE
+// ATUALIZAR CLIENTE - ✅ CORRIGIDO COM CONSUMIDOR FINAL
 // =====================================================
 export const atualizarCliente = async (req, res) => {
   try {
@@ -343,7 +354,7 @@ export const atualizarCliente = async (req, res) => {
     
     // Verificar se cliente existe
     const clienteExiste = await query(
-      'SELECT id_cliente FROM clientes WHERE id_cliente = $1 AND id_empresa = $2',
+      'SELECT id_cliente, tipo, razao_social FROM clientes WHERE id_cliente = $1 AND id_empresa = $2',
       [clienteId, empresaId]
     );
     
@@ -352,6 +363,32 @@ export const atualizarCliente = async (req, res) => {
         success: false,
         message: 'Cliente não encontrado'
       });
+    }
+    
+    const clienteAtual = clienteExiste.rows[0];
+    
+    // ✅ VALIDAÇÃO ESPECIAL PARA CONSUMIDOR FINAL (se razao_social foi enviada)
+    const razaoSocialNova = dados.razao_social || clienteAtual.razao_social;
+    const razaoSocialUpper = razaoSocialNova.trim().toUpperCase();
+    const isConsumidorFinal = (razaoSocialUpper === 'CONSUMIDOR FINAL');
+    
+    // Se for PF e NÃO for Consumidor Final, CPF é obrigatório
+    const tipoAtual = dados.tipo || clienteAtual.tipo;
+    if (tipoAtual === 'F' && !isConsumidorFinal) {
+      // Se enviou tipo ou razao_social e ficou PF sem CPF, validar
+      if (dados.tipo === 'F' || dados.razao_social) {
+        if (!dados.cpf && !clienteAtual.cpf) {
+          return res.status(400).json({
+            success: false,
+            message: 'CPF é obrigatório para Pessoa Física'
+          });
+        }
+      }
+    }
+    
+    // Log para debug
+    if (isConsumidorFinal) {
+      console.log('🎯 CONSUMIDOR FINAL detectado no UPDATE - CPF não obrigatório');
     }
     
     // Se mudou o CPF, verificar duplicidade
@@ -515,6 +552,94 @@ export const deletarCliente = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro ao deletar cliente'
+    });
+  }
+};
+
+// =====================================================
+// ALTERAR STATUS CLIENTE - ✅ CORRIGIDO
+// =====================================================
+export const alterarStatusCliente = async (req, res) => {
+  const { id } = req.params;
+  const { ativo } = req.body;
+  const empresaId = req.empresa.id; // ✅ CORRIGIDO: era req.empresaId
+  
+  try {
+    // Validar campo ativo
+    if (!ativo) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campo "ativo" é obrigatório'
+      });
+    }
+    
+    // Validar valores permitidos
+    if (!['S', 'N', 'A', 'I'].includes(ativo)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status inválido! Use "S" para ativo ou "N" para inativo'
+      });
+    }
+    
+    // ✅ CORRIGIDO: Converter S/N para A/I (formato do banco)
+    const statusFinal = (ativo === 'S' || ativo === 'A') ? 'A' : 'I';
+    
+    // Verificar se cliente existe
+    const checkResult = await query(
+      `SELECT id_cliente, razao_social, status 
+       FROM clientes 
+       WHERE id_cliente = $1 AND id_empresa = $2`,
+      [id, empresaId]
+    );
+    
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cliente não encontrado'
+      });
+    }
+    
+    const cliente = checkResult.rows[0];
+    
+    // Verificar se já está no status desejado
+    if (cliente.status === statusFinal) {
+      const acao = statusFinal === 'A' ? 'ativo' : 'inativo';
+      return res.status(200).json({
+        success: true,
+        message: `Cliente já está ${acao}`
+      });
+    }
+    
+    // Atualizar status
+    const result = await query(
+      `UPDATE clientes 
+       SET status = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id_cliente = $2 AND id_empresa = $3
+       RETURNING id_cliente, razao_social, status`,
+      [statusFinal, id, empresaId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao atualizar status do cliente'
+      });
+    }
+    
+    const acao = statusFinal === 'A' ? 'ativado' : 'inativado';
+    
+    return res.status(200).json({
+      success: true,
+      message: `Cliente ${acao} com sucesso!`,
+      data: result.rows[0]
+    });
+    
+  } catch (error) {
+    console.error('Erro ao alterar status do cliente:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao alterar status do cliente',
+      error: error.message
     });
   }
 };

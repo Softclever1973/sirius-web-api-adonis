@@ -1,5 +1,6 @@
 // =====================================================
 // SIRIUS WEB API - Rotas de Clientes
+// VERSÃO CORRIGIDA - Com suporte a PATCH para status
 // =====================================================
 
 import express from 'express';
@@ -8,7 +9,8 @@ import {
   buscarCliente,
   criarCliente,
   atualizarCliente,
-  deletarCliente
+  deletarCliente,
+  alterarStatusCliente
 } from '../controllers/clientes-controller.js';
 import { authenticateToken } from '../middlewares/auth-middleware.js';
 import { setTenant } from '../middlewares/tenant-middleware.js';
@@ -34,6 +36,9 @@ router.post('/', criarCliente);
 
 // PUT /clientes/:id - Atualizar cliente
 router.put('/:id', atualizarCliente);
+
+// PATCH /clientes/:id - Alterar status (ativar/inativar)
+router.patch('/:id', alterarStatusCliente);
 
 // DELETE /clientes/:id - Inativar cliente (soft delete)
 router.delete('/:id', deletarCliente);
