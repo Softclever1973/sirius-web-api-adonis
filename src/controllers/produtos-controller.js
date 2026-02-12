@@ -1,6 +1,7 @@
 // =====================================================
 // SIRIUS WEB API - Controller de Produtos
 // ADAPTADO PARA SCHEMA EXISTENTE
+// VERSÃO CORRIGIDA - ORDENAÇÃO FUNCIONANDO
 // =====================================================
 
 import { query } from '../config/database.js';
@@ -24,7 +25,9 @@ export const listarProdutos = async (req, res) => {
     const ean = req.query.ean || ''; // Filtro específico por EAN
     const ativo = req.query.ativo; // 'S', 'N' ou undefined (todos)
     const orderBy = req.query.orderBy || 'descricao';
-    const orderDir = req.query.orderDir === 'desc' ? 'DESC' : 'ASC';
+    
+    // ✅ CORREÇÃO: Aceitar tanto maiúsculo quanto minúsculo
+    const orderDir = req.query.orderDir?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
     
     // Construir query com filtros
     let whereConditions = ['id_empresa = $1'];
