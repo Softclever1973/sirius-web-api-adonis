@@ -17,6 +17,7 @@ import formasPagamentoRoutes from './routes/formas-pagamento-routes.js';
 import regimesTributariosRoutes from './routes/regimes-tributarios-routes.js';
 import pdvRoutes from './routes/pdv-routes.js';
 import pedidosRoutes from './routes/pedidos-routes.js';
+import parametrosRoutes from './routes/parametros-routes.js'; // ✅ ADICIONADO
 
 // Configurar variáveis de ambiente
 dotenv.config();
@@ -43,7 +44,7 @@ app.use(express.urlencoded({ extended: true }));
 // Log de requisições (apenas em desenvolvimento)
 if (process.env.NODE_ENV === 'development') {
   app.use((req, res, next) => {
-    console.log(`🔨 ${req.method} ${req.path}`);
+    console.log(`📨 ${req.method} ${req.path}`);
     next();
   });
 }
@@ -91,6 +92,9 @@ app.use('/pdv', pdvRoutes);
 
 // Rotas de Pedidos (Consulta)
 app.use('/pdv', pedidosRoutes);
+
+// Rotas de Parâmetros ✅ ADICIONADO
+app.use('/parametros', parametrosRoutes);
 
 // =====================================================
 // TRATAMENTO DE ERROS
