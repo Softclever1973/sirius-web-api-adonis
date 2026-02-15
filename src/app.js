@@ -17,7 +17,9 @@ import formasPagamentoRoutes from './routes/formas-pagamento-routes.js';
 import regimesTributariosRoutes from './routes/regimes-tributarios-routes.js';
 import pdvRoutes from './routes/pdv-routes.js';
 import pedidosRoutes from './routes/pedidos-routes.js';
-import parametrosRoutes from './routes/parametros-routes.js'; // ✅ ADICIONADO
+import parametrosDefinicoesRoutes from './routes/parametros-definicoes-routes.js'; // ✅ NOVO
+import parametrosValoresRoutes from './routes/parametros-valores-routes.js'; // ✅ NOVO
+import parametrosSuperAdminRoutes from './routes/parametros-superadmin-routes.js'; // ✅ SUPER ADMIN
 
 // Configurar variáveis de ambiente
 dotenv.config();
@@ -93,8 +95,10 @@ app.use('/pdv', pdvRoutes);
 // Rotas de Pedidos (Consulta)
 app.use('/pdv', pedidosRoutes);
 
-// Rotas de Parâmetros ✅ ADICIONADO
-app.use('/parametros', parametrosRoutes);
+// Rotas de Parâmetros ✅ ATUALIZADO
+app.use('/parametros/superadmin', parametrosSuperAdminRoutes); // Super Admin (configurar empresas)
+app.use('/parametros/definicoes', parametrosDefinicoesRoutes); // Definições globais (super admin)
+app.use('/parametros', parametrosValoresRoutes);                // Valores por empresa (todos)
 
 // =====================================================
 // TRATAMENTO DE ERROS
