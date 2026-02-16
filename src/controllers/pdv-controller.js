@@ -1,17 +1,17 @@
 // =====================================================
 // SIRIUS WEB API - Controller de PDV
+// ✅ CORRIGIDO: Validação de estoque com parâmetro
 // =====================================================
 
 import { query } from '../config/database.js';
 
 // =====================================================
 // BUSCAR CLIENTES PARA PDV
-// Permite busca por razÃ£o social ou CNPJ
 // =====================================================
 export const buscarClientes = async (req, res) => {
   try {
     const empresaId = req.empresa.id;
-    const { termo } = req.query; // termo de busca
+    const { termo } = req.query;
     
     if (!termo || termo.length < 2) {
       return res.json({
@@ -20,7 +20,6 @@ export const buscarClientes = async (req, res) => {
       });
     }
     
-    // Remove caracteres especiais do CNPJ/CPF para comparaÃ§Ã£o
     const termoLimpo = termo.replace(/[^\d]/g, '');
     
     const sql = `
@@ -67,7 +66,6 @@ export const buscarClientes = async (req, res) => {
 
 // =====================================================
 // BUSCAR PRODUTOS PARA PDV
-// Permite busca por cÃ³digo, EAN ou descriÃ§Ã£o
 // =====================================================
 export const buscarProdutos = async (req, res) => {
   try {
@@ -122,17 +120,20 @@ export const buscarProdutos = async (req, res) => {
 };
 
 // =====================================================
-// OBTER PRIMEIRO CLIENTE (Consumidor Final)
+// OBTER PRIMEIRO CLIENTE (CONSUMIDOR PADRÃO)
 // =====================================================
 export const obterPrimeiroCliente = async (req, res) => {
   try {
     const empresaId = req.empresa.id;
     
+    // ✅ CORRIGIDO: Buscar cliente ID 1 (CONSUMIDOR) da empresa
     const sql = `
       SELECT 
         id_cliente as id,
         razao_social,
         nome_fantasia,
+        cpf,
+        cnpj,
         tipo,
         CASE 
           WHEN tipo = 'J' THEN cnpj
@@ -141,8 +142,11 @@ export const obterPrimeiroCliente = async (req, res) => {
         END as documento
       FROM clientes
       WHERE id_empresa = $1 
-        AND status = 'A'
-      ORDER BY id_cliente ASC
+        AND id_cliente = (
+          SELECT MIN(id_cliente) 
+          FROM clientes 
+          WHERE id_empresa = $1 AND status = 'A'
+        )
       LIMIT 1
     `;
     
@@ -151,7 +155,7 @@ export const obterPrimeiroCliente = async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Nenhum cliente cadastrado'
+        message: 'Nenhum cliente cadastrado. Cadastre um cliente primeiro.'
       });
     }
     
@@ -161,30 +165,74 @@ export const obterPrimeiroCliente = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Erro ao obter primeiro cliente:', error);
+    console.error('Erro ao obter cliente padrão:', error);
     res.status(500).json({
       success: false,
-      message: 'Erro ao obter cliente padrÃ£o'
+      message: 'Erro ao obter cliente padrão'
     });
   }
 };
 
 // =====================================================
-// LISTAR FORMAS DE PAGAMENTO ATIVAS
+// OBTER CLIENTE POR ID ESPECÍFICO
+// =====================================================
+export const obterClientePorId = async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const { id } = req.params;
+    
+    const sql = `
+      SELECT 
+        id_cliente as id,
+        razao_social,
+        nome_fantasia,
+        cpf,
+        cnpj,
+        tipo,
+        CASE 
+          WHEN tipo = 'J' THEN cnpj
+          WHEN tipo = 'F' THEN cpf
+          ELSE ''
+        END as documento
+      FROM clientes
+      WHERE id_empresa = $1 AND id_cliente = $2
+      LIMIT 1
+    `;
+    
+    const result = await query(sql, [empresaId, id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cliente não encontrado'
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: result.rows[0]
+    });
+    
+  } catch (error) {
+    console.error('Erro ao obter cliente:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao obter cliente'
+    });
+  }
+};
+
+// =====================================================
+// LISTAR FORMAS DE PAGAMENTO
 // =====================================================
 export const listarFormasPagamento = async (req, res) => {
   try {
     const empresaId = req.empresa.id;
     
     const sql = `
-      SELECT 
-        id_forma_pagamento as id,
-        codigo,
-        descricao,
-        permite_troco
+      SELECT *
       FROM formas_pagamento
-      WHERE id_empresa = $1 
-        AND ativo = true
+      WHERE id_empresa = $1 AND ativo = true
       ORDER BY descricao
     `;
     
@@ -205,7 +253,7 @@ export const listarFormasPagamento = async (req, res) => {
 };
 
 // =====================================================
-// OBTER PRÃƒâ€œXIMO NÃƒÅ¡MERO DE PEDIDO
+// OBTER PRÓXIMO NÚMERO DE PEDIDO
 // =====================================================
 export const obterProximoNumero = async (req, res) => {
   try {
@@ -227,18 +275,42 @@ export const obterProximoNumero = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Erro ao obter prÃ³ximo nÃºmero:', error);
+    console.error('Erro ao obter próximo número:', error);
     res.status(500).json({
       success: false,
-      message: 'Erro ao obter prÃ³ximo nÃºmero'
+      message: 'Erro ao obter próximo número'
     });
   }
 };
 
 // =====================================================
-// VALIDAR ESTOQUE ANTES DE FINALIZAR
+// ✅ VALIDAR ESTOQUE ANTES DE FINALIZAR (COM PARÂMETRO)
 // =====================================================
 const validarEstoque = async (empresaId, itens) => {
+  // ✅ BUSCAR PARÂMETRO PERMITE_SALDO_NEGATIVO
+  const parametroQuery = `
+    SELECT COALESCE(pv.valor, pd.valor_padrao) as valor
+    FROM parametros_definicoes pd
+    LEFT JOIN parametros_valores pv 
+      ON pv.id_parametro = pd.id_parametro 
+      AND pv.id_empresa = $1
+    WHERE pd.codigo = 'PERMITE_SALDO_NEGATIVO'
+  `;
+  
+  const parametroResult = await query(parametroQuery, [empresaId]);
+  const permiteSaldoNegativo = parametroResult.rows[0]?.valor || 'N';
+  
+  console.log(`📊 PERMITE_SALDO_NEGATIVO = ${permiteSaldoNegativo} (empresa ${empresaId})`);
+  
+  // ✅ SE PERMITE SALDO NEGATIVO, NÃO VALIDAR ESTOQUE
+  if (permiteSaldoNegativo === 'S') {
+    console.log('✅ Saldo negativo permitido - pulando validação de estoque');
+    return; // Não valida!
+  }
+  
+  // ✅ SE NÃO PERMITE, VALIDAR NORMALMENTE
+  console.log('🔒 Validando estoque (não permite saldo negativo)...');
+  
   for (const item of itens) {
     const sql = `
       SELECT saldo
@@ -257,10 +329,12 @@ const validarEstoque = async (empresaId, itens) => {
     if (saldoAtual < parseFloat(item.quantidade)) {
       throw new Error(
         `Estoque insuficiente para ${item.descricao}. ` +
-        `DisponÃ­vel: ${saldoAtual} - Solicitado: ${item.quantidade}`
+        `Disponível: ${saldoAtual} - Solicitado: ${item.quantidade}`  // ✅ UTF-8 CORRIGIDO
       );
     }
   }
+  
+  console.log('✅ Estoque validado - tudo OK');
 };
 
 // =====================================================
@@ -279,7 +353,7 @@ const darBaixaEstoque = async (empresaId, usuarioId, pedidoId, itens) => {
     
     await query(updateSql, [item.quantidade, empresaId, item.id_produto]);
     
-    // 2. Registrar movimentaÃ§Ã£o
+    // 2. Registrar movimentação
     const movSql = `
       INSERT INTO movimentacoes_estoque (
         id_empresa,
@@ -325,7 +399,7 @@ const darBaixaEstoque = async (empresaId, usuarioId, pedidoId, itens) => {
 export const finalizarPedido = async (req, res) => {
   try {
     const empresaId = req.empresa.id;
-    const usuarioId = req.user.id; // Ã¢â€ Â CORRIGIDO: req.user ao invés de req.usuario
+    const usuarioId = req.user.id;
     const {
       numero,
       cliente,
@@ -338,7 +412,7 @@ export const finalizarPedido = async (req, res) => {
       observacoes
     } = req.body;
     
-    // ValidaÃ§Ãµes
+    // Validações
     if (!cliente || !cliente.id) {
       return res.status(400).json({
         success: false,
@@ -360,14 +434,13 @@ export const finalizarPedido = async (req, res) => {
       });
     }
     
-    // Validar se o total dos pagamentos confere (DESCONTANDO O TROCO)
+    // Validar se o total dos pagamentos confere
     const totalPago = pagamentos.reduce((sum, p) => {
       const valor = parseFloat(p.valor) || 0;
       const troco = parseFloat(p.troco) || 0;
       return sum + (valor - troco);
     }, 0);
     
-    // Arredondar para evitar erros de ponto flutuante
     const totalPagoArredondado = Math.round(totalPago * 100) / 100;
     const valorLiquidoArredondado = Math.round(parseFloat(valor_liquido) * 100) / 100;
     
@@ -378,7 +451,7 @@ export const finalizarPedido = async (req, res) => {
       });
     }
     
-    // Validar estoque
+    // ✅ VALIDAR ESTOQUE (COM PARÂMETRO)
     await validarEstoque(empresaId, itens);
     
     // Buscar dados do cliente
@@ -390,7 +463,7 @@ export const finalizarPedido = async (req, res) => {
       [cliente.id]
     );
     
-    // Iniciar transaÃ§Ã£o
+    // Iniciar transação
     await query('BEGIN');
     
     try {
@@ -491,7 +564,7 @@ export const finalizarPedido = async (req, res) => {
       // 4. Dar baixa no estoque
       await darBaixaEstoque(empresaId, usuarioId, pedidoId, itens);
       
-      // Commit da transaÃ§Ã£o
+      // Commit da transação
       await query('COMMIT');
       
       res.json({
@@ -504,7 +577,6 @@ export const finalizarPedido = async (req, res) => {
       });
       
     } catch (error) {
-      // Rollback em caso de erro
       await query('ROLLBACK');
       throw error;
     }
@@ -529,38 +601,32 @@ export const listarPedidos = async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
     
-    // ParÃ¢metros de filtro
     const ordenacao = req.query.ordenacao || 'numero_desc';
     const filtroPorNumero = req.query.numero;
     const filtroHoje = req.query.hoje === 'true';
     const dataInicial = req.query.data_inicial;
     const idCliente = req.query.id_cliente;
     
-    // Construir WHERE clause
     let whereConditions = ['p.id_empresa = $1'];
     let params = [empresaId];
     let paramCount = 1;
     
-    // Filtro por nÃºmero
     if (filtroPorNumero) {
       paramCount++;
       whereConditions.push(`p.numero = $${paramCount}`);
       params.push(filtroPorNumero);
     }
     
-    // Filtro por hoje
     if (filtroHoje) {
       whereConditions.push(`DATE(p.created_at) = CURRENT_DATE`);
     }
     
-    // Filtro por data inicial
     if (dataInicial) {
       paramCount++;
       whereConditions.push(`DATE(p.created_at) >= $${paramCount}`);
       params.push(dataInicial);
     }
     
-    // Filtro por cliente
     if (idCliente) {
       paramCount++;
       whereConditions.push(`p.id_cliente = $${paramCount}`);
@@ -569,47 +635,41 @@ export const listarPedidos = async (req, res) => {
     
     const whereClause = whereConditions.join(' AND ');
     
-    // Definir ordenaÃ§Ã£o
-    let orderClause = 'p.id_pedido_venda DESC'; // padrÃ£o
-    if (ordenacao === 'numero_asc') {
-      orderClause = 'p.numero ASC';
-    } else if (ordenacao === 'numero_desc') {
-      orderClause = 'p.numero DESC';
+    let orderByClause;
+    switch(ordenacao) {
+      case 'numero_asc':
+        orderByClause = 'p.numero ASC';
+        break;
+      case 'data_asc':
+        orderByClause = 'p.created_at ASC';
+        break;
+      case 'data_desc':
+        orderByClause = 'p.created_at DESC';
+        break;
+      default:
+        orderByClause = 'p.numero DESC';
     }
     
-    // Contagem
-    const countSql = `
-      SELECT COUNT(*) as total
-      FROM pedidos_venda p
-      WHERE ${whereClause}
-    `;
-    
+    const countSql = `SELECT COUNT(*) as total FROM pedidos_venda p WHERE ${whereClause}`;
     const countResult = await query(countSql, params);
     const total = parseInt(countResult.rows[0].total);
+    const totalPages = Math.ceil(total / limit);
     
-    // Dados
     const sql = `
       SELECT 
-        p.id_pedido_venda as id,
-        p.numero,
-        p.nome_cliente,
-        p.cpf_cnpj_cliente,
-        p.valor_liquido,
-        p.status,
-        p.created_at,
-        p.data_finalizacao,
+        p.*,
+        c.razao_social as cliente_razao_social,
+        c.nome_fantasia as cliente_nome_fantasia,
         u.nome || ' ' || u.sobrenome as usuario
       FROM pedidos_venda p
+      LEFT JOIN clientes c ON c.id_cliente = p.id_cliente
       LEFT JOIN usuarios u ON u.id_usuario = p.id_usuario
       WHERE ${whereClause}
-      ORDER BY ${orderClause}
+      ORDER BY ${orderByClause}
       LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
     `;
     
-    params.push(limit, offset);
-    const result = await query(sql, params);
-    
-    const totalPages = Math.ceil(total / limit);
+    const result = await query(sql, [...params, limit, offset]);
     
     res.json({
       success: true,
@@ -641,7 +701,6 @@ export const buscarPedido = async (req, res) => {
     const empresaId = req.empresa.id;
     const { id } = req.params;
     
-    // Buscar pedido
     const pedidoSql = `
       SELECT 
         p.*,
@@ -663,7 +722,6 @@ export const buscarPedido = async (req, res) => {
       });
     }
     
-    // Buscar itens
     const itensSql = `
       SELECT *
       FROM pedidos_venda_itens
@@ -673,7 +731,6 @@ export const buscarPedido = async (req, res) => {
     
     const itensResult = await query(itensSql, [id]);
     
-    // Buscar pagamentos
     const pagamentosSql = `
       SELECT 
         pp.*,

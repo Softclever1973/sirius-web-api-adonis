@@ -1,5 +1,6 @@
 // =====================================================
 // SIRIUS WEB API - Rotas de PDV
+// ✅ CORRIGIDO: Incluindo rota /clientes/:id
 // =====================================================
 
 import express from 'express';
@@ -7,6 +8,7 @@ import {
   buscarClientes,
   buscarProdutos,
   obterPrimeiroCliente,
+  obterClientePorId,  // ✅ NOVO
   listarFormasPagamento,
   obterProximoNumero,
   finalizarPedido,
@@ -32,7 +34,10 @@ router.get('/clientes/buscar', buscarClientes);
 // Buscar produtos (por código, EAN ou descrição)
 router.get('/produtos/buscar', buscarProdutos);
 
-// Obter primeiro cliente (Consumidor Final)
+// ✅ OBTER CLIENTE POR ID ESPECÍFICO (deve vir ANTES de /cliente-padrao)
+router.get('/clientes/:id', obterClientePorId);
+
+// ✅ OBTER PRIMEIRO CLIENTE (Consumidor Padrão)
 router.get('/cliente-padrao', obterPrimeiroCliente);
 
 // Listar formas de pagamento ativas

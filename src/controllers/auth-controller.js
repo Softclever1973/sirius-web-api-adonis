@@ -1,231 +1,89 @@
 // =====================================================
-// Controller de Autenticação
+// SIRIUS WEB API - Controller de Autenticação
+// ATUALIZADO: Retorna parâmetros no login
 // =====================================================
 
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { query, getClient, setEmpresaId } from '../config/database.js';
+import { query, getClient } from '../config/database.js';
 
 /**
  * POST /auth/register
- * Cadastrar nova empresa + primeiro usuário (administrador)
+ * Registrar novo usuário
  */
 export const register = async (req, res) => {
   const client = await getClient();
   
   try {
-    const {
-      // Dados do usuário
-      nome,
-      sobrenome,
-      email,
-      senha,
-      celular,
-      
-      // Dados da empresa
-      razao_social,
-      nome_fantasia,
-      cnpj,
-      logradouro_tipo,
-      logradouro,
-      numero,
-      complemento,
-      bairro,
-      municipio,
-      uf,
-      cep,
-      telefone,
-      email_empresa
-    } = req.body;
-    
-    // Validações básicas
-    if (!nome || !sobrenome || !email || !senha || !celular) {
-      return res.status(400).json({
-        success: false,
-        message: 'Dados do usuário incompletos (nome, sobrenome, email, senha, celular)'
-      });
-    }
-    
-    if (!razao_social || !nome_fantasia || !cnpj || !logradouro || !numero || !bairro || !uf || !cep || !telefone || !email_empresa) {
-      return res.status(400).json({
-        success: false,
-        message: 'Dados da empresa incompletos'
-      });
-    }
-    
-    // Validar formato de email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email do usuário inválido'
-      });
-    }
-    
-    // Validar CNPJ (apenas dígitos)
-    const cnpjLimpo = cnpj.replace(/\D/g, '');
-    if (cnpjLimpo.length !== 14) {
-      return res.status(400).json({
-        success: false,
-        message: 'CNPJ inválido (deve conter 14 dígitos)'
-      });
-    }
-    
-    // Iniciar transação
     await client.query('BEGIN');
     
+    const { nome, sobrenome, email, senha, celular, razao_social, cnpj } = req.body;
+    
+    // Validações básicas
+    if (!nome || !email || !senha || !razao_social || !cnpj) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nome, email, senha, razão social e CNPJ são obrigatórios'
+      });
+    }
+    
     // Verificar se email já existe
-    const usuarioExiste = await client.query(
+    const emailExists = await client.query(
       'SELECT id_usuario FROM usuarios WHERE email = $1',
       [email.toLowerCase()]
     );
     
-    if (usuarioExiste.rows.length > 0) {
-      await client.query('ROLLBACK');
+    if (emailExists.rows.length > 0) {
       return res.status(400).json({
         success: false,
         message: 'Este email já está cadastrado'
       });
     }
     
-    // Verificar se CNPJ já existe
-    const empresaExiste = await client.query(
-      'SELECT id_empresa FROM empresas WHERE cnpj = $1',
-      [cnpjLimpo]
-    );
-    
-    if (empresaExiste.rows.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        success: false,
-        message: 'Este CNPJ já está cadastrado'
-      });
-    }
-    
-    // Hash da senha (bcrypt)
+    // Hash da senha
     const senhaHash = await bcrypt.hash(senha, 10);
     
-    // 1. Criar usuário
-    const novoUsuario = await client.query(
-      `INSERT INTO usuarios (nome, sobrenome, email, senha_hash, celular, status, email_verificado)
-       VALUES ($1, $2, $3, $4, $5, 'A', false)
+    // Inserir usuário
+    const userResult = await client.query(
+      `INSERT INTO usuarios (nome, sobrenome, email, senha_hash, celular, status)
+       VALUES ($1, $2, $3, $4, $5, 'A')
        RETURNING id_usuario, nome, sobrenome, email, celular`,
-      [nome, sobrenome, email.toLowerCase(), senhaHash, celular]
+      [nome, sobrenome || '', email.toLowerCase(), senhaHash, celular || null]
     );
     
-    const usuario = novoUsuario.rows[0];
+    const usuario = userResult.rows[0];
     
-    // 2. Criar empresa (plano FREE por padrão)
-    const novaEmpresa = await client.query(
-      `INSERT INTO empresas (
-        razao_social, nome_fantasia, cnpj,
-        logradouro_tipo, logradouro, numero, complemento, bairro,
-        municipio, uf, cep, telefone, email,
-        status, plano, limite_nfce_mes, limite_valor_mes
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'A', 'FREE', 200, 50000.00)
-      RETURNING id_empresa, razao_social, nome_fantasia, cnpj, plano`,
-      [
-        razao_social, nome_fantasia, cnpjLimpo,
-        logradouro_tipo, logradouro, numero, complemento, bairro,
-        municipio, uf, cep, telefone, email_empresa
-      ]
+    // Criar empresa
+    const empresaResult = await client.query(
+      `INSERT INTO empresas (razao_social, nome_fantasia, cnpj, plano, status)
+       VALUES ($1, $2, $3, 'FREE', 'A')
+       RETURNING id_empresa, razao_social, nome_fantasia, cnpj, plano`,
+      [razao_social, razao_social, cnpj]
     );
     
-    const empresa = novaEmpresa.rows[0];
+    const empresa = empresaResult.rows[0];
     
-    // 3. Vincular usuário à empresa (como admin)
+    // Vincular usuário à empresa como ADMIN
     await client.query(
       `INSERT INTO usuario_empresa (id_usuario, id_empresa, is_admin, ativo)
        VALUES ($1, $2, true, true)`,
       [usuario.id_usuario, empresa.id_empresa]
     );
     
-    // 4. Criar formas de pagamento padrão (códigos SEFAZ)
-    const formasPagamento = [
-      ['01', 'Dinheiro', true],
-      ['03', 'Cartão de Crédito', false],
-      ['04', 'Cartão de Débito', false],
-      ['17', 'PIX', false]
-    ];
-    
-    for (const [codigo, descricao, permite_troco] of formasPagamento) {
-      await client.query(
-        `INSERT INTO formas_pagamento (id_empresa, codigo, descricao, permite_troco, ativo)
-         VALUES ($1, $2, $3, $4, true)`,
-        [empresa.id_empresa, codigo, descricao, permite_troco]
-      );
-    }
-    
-    // 5. Criar sequence para vendedores (se não existir)
-    await client.query(`
-      CREATE SEQUENCE IF NOT EXISTS vendedores_id_vendedor_seq;
-    `);
-    
-    // 6. Criar tabela vendedores (se não existir)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS vendedores (
-        id_vendedor integer NOT NULL DEFAULT nextval('vendedores_id_vendedor_seq'::regclass),
-        id_empresa integer NOT NULL,
-        nome text NOT NULL,
-        cpf character varying,
-        fone character varying,
-        email text,
-        endereco text,
-        complemento text,
-        cidade text,
-        uf character varying(2),
-        cep character varying,
-        comissao numeric,
-        meta_vendas numeric,
-        status character DEFAULT 'A'::bpchar CHECK (status = ANY (ARRAY['A'::bpchar, 'I'::bpchar])),
-        observacoes text,
-        created_at timestamp without time zone DEFAULT now(),
-        updated_at timestamp without time zone DEFAULT now(),
-        CONSTRAINT vendedores_pkey PRIMARY KEY (id_vendedor),
-        CONSTRAINT vendedores_id_empresa_fkey FOREIGN KEY (id_empresa) REFERENCES empresas(id_empresa)
-      );
-    `);
-    
-    // 7. Criar índices para vendedores (se não existirem)
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_vendedores_id_empresa ON vendedores(id_empresa);
-      CREATE INDEX IF NOT EXISTS idx_vendedores_status ON vendedores(status);
-      CREATE INDEX IF NOT EXISTS idx_vendedores_nome ON vendedores(nome);
-    `);
-    
-    // Commit da transação
     await client.query('COMMIT');
     
-    // Gerar token JWT
-    const token = jwt.sign(
-      {
-        id: usuario.id_usuario,
-        email: usuario.email,
-        nome: `${usuario.nome} ${usuario.sobrenome}`
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
-    
-    // Retornar sucesso
-    return res.status(201).json({
+    res.status(201).json({
       success: true,
-      message: 'Cadastro realizado com sucesso!',
+      message: 'Cadastro realizado com sucesso! Faça login para continuar.',
       data: {
-        token,
         usuario: {
           id: usuario.id_usuario,
           nome: usuario.nome,
-          sobrenome: usuario.sobrenome,
           email: usuario.email
         },
         empresa: {
           id: empresa.id_empresa,
-          razao_social: empresa.razao_social,
-          nome_fantasia: empresa.nome_fantasia,
-          cnpj: empresa.cnpj,
-          plano: empresa.plano
+          razao_social: empresa.razao_social
         }
       }
     });
@@ -246,6 +104,7 @@ export const register = async (req, res) => {
 /**
  * POST /auth/login
  * Login do usuário
+ * ✅ ATUALIZADO: Retorna parâmetros da empresa
  */
 export const login = async (req, res) => {
   try {
@@ -318,6 +177,31 @@ export const login = async (req, res) => {
       });
     }
     
+    // ✅ NOVO: Buscar TODOS os parâmetros da primeira empresa
+    const empresaId = empresas[0].id_empresa;
+    
+    const parametrosQuery = `
+      SELECT 
+        pd.codigo,
+        COALESCE(pv.valor, pd.valor_padrao) as valor
+      FROM parametros_definicoes pd
+      LEFT JOIN parametros_valores pv 
+        ON pv.id_parametro = pd.id_parametro 
+        AND pv.id_empresa = $1
+      WHERE pd.ativo = true
+      ORDER BY pd.codigo
+    `;
+    
+    const parametrosResult = await query(parametrosQuery, [empresaId]);
+    
+    // Transformar array em objeto { codigo: valor }
+    const parametros = {};
+    parametrosResult.rows.forEach(row => {
+      parametros[row.codigo] = row.valor;
+    });
+    
+    console.log(`✅ Login: ${usuario.email} - ${parametrosResult.rows.length} parâmetros carregados`);
+    
     // Atualizar último login
     await query(
       'UPDATE usuarios SET ultimo_login = NOW() WHERE id_usuario = $1',
@@ -335,7 +219,7 @@ export const login = async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
     
-    // Retornar sucesso
+    // Retornar sucesso COM PARÂMETROS
     return res.status(200).json({
       success: true,
       message: 'Login realizado com sucesso!',
@@ -355,7 +239,8 @@ export const login = async (req, res) => {
           cnpj: emp.cnpj,
           plano: emp.plano,
           is_admin: emp.is_admin
-        }))
+        })),
+        parametros: parametros  // ✅ NOVO! Todos os parâmetros da empresa
       }
     });
     
