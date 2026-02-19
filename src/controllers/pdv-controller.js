@@ -1,60 +1,96 @@
 // =====================================================
 // SIRIUS WEB API - Controller de PDV
-// ✅ CORRIGIDO: Validação de estoque com parâmetro
+// âœ… CORRIGIDO: ValidaÃ§Ã£o de estoque com parÃ¢metro
 // =====================================================
 
 import { query } from '../config/database.js';
 
 // =====================================================
 // BUSCAR CLIENTES PARA PDV
+// ✅ CORRIGIDO: termoNumerico vazio causava '%%' que
+//    retornava todos os clientes indevidamente.
+//    Agora a condição de CPF/CNPJ só é aplicada quando
+//    o usuário realmente digitou dígitos.
 // =====================================================
 export const buscarClientes = async (req, res) => {
   try {
     const empresaId = req.empresa.id;
     const { termo } = req.query;
-    
+
     if (!termo || termo.length < 2) {
-      return res.json({
-        success: true,
-        data: []
-      });
+      return res.json({ success: true, data: [] });
     }
-    
-    const termoLimpo = termo.replace(/[^\d]/g, '');
-    
-    const sql = `
-      SELECT 
-        id_cliente as id,
-        razao_social,
-        nome_fantasia,
-        cpf,
-        cnpj,
-        tipo,
-        CASE 
-          WHEN tipo = 'J' THEN cnpj
-          WHEN tipo = 'F' THEN cpf
-          ELSE ''
-        END as documento
-      FROM clientes
-      WHERE id_empresa = $1 
-        AND status = 'A'
-        AND (
-          razao_social ILIKE $2
-          OR nome_fantasia ILIKE $2
-          OR REPLACE(REPLACE(REPLACE(cnpj, '.', ''), '/', ''), '-', '') ILIKE $3
-          OR REPLACE(REPLACE(cpf, '.', ''), '-', '') ILIKE $3
-        )
-      ORDER BY razao_social
-      LIMIT 20
-    `;
-    
-    const result = await query(sql, [empresaId, `%${termo}%`, `%${termoLimpo}%`]);
-    
+
+    // Remove tudo que não for dígito para busca por CPF/CNPJ
+    const termoNumerico = termo.replace(/[^\d]/g, '');
+
+    let sql;
+    let params;
+
+    if (termoNumerico.length > 0) {
+      // Usuário digitou dígitos: buscar por nome E por CPF/CNPJ
+      sql = `
+        SELECT
+          id_cliente as id,
+          razao_social,
+          nome_fantasia,
+          cpf,
+          cnpj,
+          tipo,
+          CASE
+            WHEN tipo = 'J' THEN cnpj
+            WHEN tipo = 'F' THEN cpf
+            ELSE ''
+          END as documento
+        FROM clientes
+        WHERE id_empresa = $1
+          AND status = 'A'
+          AND (
+            razao_social ILIKE $2
+            OR nome_fantasia ILIKE $2
+            OR REPLACE(REPLACE(REPLACE(cnpj, '.', ''), '/', ''), '-', '') ILIKE $3
+            OR REPLACE(REPLACE(cpf, '.', ''), '-', '') ILIKE $3
+          )
+        ORDER BY razao_social
+        LIMIT 20
+      `;
+      params = [empresaId, `%${termo}%`, `%${termoNumerico}%`];
+    } else {
+      // Usuário digitou somente letras: buscar APENAS por nome
+      // Não incluir CPF/CNPJ para evitar '%%' que retorna tudo
+      sql = `
+        SELECT
+          id_cliente as id,
+          razao_social,
+          nome_fantasia,
+          cpf,
+          cnpj,
+          tipo,
+          CASE
+            WHEN tipo = 'J' THEN cnpj
+            WHEN tipo = 'F' THEN cpf
+            ELSE ''
+          END as documento
+        FROM clientes
+        WHERE id_empresa = $1
+          AND status = 'A'
+          AND (
+            razao_social ILIKE $2
+            OR nome_fantasia ILIKE $2
+          )
+        ORDER BY razao_social
+        LIMIT 20
+      `;
+      params = [empresaId, `%${termo}%`];
+    }
+
+    const result = await query(sql, params);
+
     res.json({
       success: true,
       data: result.rows
     });
-    
+
   } catch (error) {
     console.error('Erro ao buscar clientes:', error);
     res.status(500).json({
@@ -120,13 +156,13 @@ export const buscarProdutos = async (req, res) => {
 };
 
 // =====================================================
-// OBTER PRIMEIRO CLIENTE (CONSUMIDOR PADRÃO)
+// OBTER PRIMEIRO CLIENTE (CONSUMIDOR PADRÃƒO)
 // =====================================================
 export const obterPrimeiroCliente = async (req, res) => {
   try {
     const empresaId = req.empresa.id;
     
-    // ✅ CORRIGIDO: Buscar cliente ID 1 (CONSUMIDOR) da empresa
+    // âœ… CORRIGIDO: Buscar cliente ID 1 (CONSUMIDOR) da empresa
     const sql = `
       SELECT 
         id_cliente as id,
@@ -165,16 +201,16 @@ export const obterPrimeiroCliente = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Erro ao obter cliente padrão:', error);
+    console.error('Erro ao obter cliente padrÃ£o:', error);
     res.status(500).json({
       success: false,
-      message: 'Erro ao obter cliente padrão'
+      message: 'Erro ao obter cliente padrÃ£o'
     });
   }
 };
 
 // =====================================================
-// OBTER CLIENTE POR ID ESPECÍFICO
+// OBTER CLIENTE POR ID ESPECÃFICO
 // =====================================================
 export const obterClientePorId = async (req, res) => {
   try {
@@ -204,7 +240,7 @@ export const obterClientePorId = async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Cliente não encontrado'
+        message: 'Cliente nÃ£o encontrado'
       });
     }
     
@@ -230,7 +266,12 @@ export const listarFormasPagamento = async (req, res) => {
     const empresaId = req.empresa.id;
     
     const sql = `
-      SELECT *
+      SELECT
+        id_forma_pagamento AS id,
+        codigo,
+        descricao,
+        permite_troco,
+        ativo
       FROM formas_pagamento
       WHERE id_empresa = $1 AND ativo = true
       ORDER BY descricao
@@ -253,7 +294,7 @@ export const listarFormasPagamento = async (req, res) => {
 };
 
 // =====================================================
-// OBTER PRÓXIMO NÚMERO DE PEDIDO
+// OBTER PRÃ“XIMO NÃšMERO DE PEDIDO
 // =====================================================
 export const obterProximoNumero = async (req, res) => {
   try {
@@ -275,19 +316,19 @@ export const obterProximoNumero = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Erro ao obter próximo número:', error);
+    console.error('Erro ao obter prÃ³ximo nÃºmero:', error);
     res.status(500).json({
       success: false,
-      message: 'Erro ao obter próximo número'
+      message: 'Erro ao obter prÃ³ximo nÃºmero'
     });
   }
 };
 
 // =====================================================
-// ✅ VALIDAR ESTOQUE ANTES DE FINALIZAR (COM PARÂMETRO)
+// âœ… VALIDAR ESTOQUE ANTES DE FINALIZAR (COM PARÃ‚METRO)
 // =====================================================
 const validarEstoque = async (empresaId, itens) => {
-  // ✅ BUSCAR PARÂMETRO PERMITE_SALDO_NEGATIVO
+  // âœ… BUSCAR PARÃ‚METRO PERMITE_SALDO_NEGATIVO
   const parametroQuery = `
     SELECT COALESCE(pv.valor, pd.valor_padrao) as valor
     FROM parametros_definicoes pd
@@ -300,16 +341,16 @@ const validarEstoque = async (empresaId, itens) => {
   const parametroResult = await query(parametroQuery, [empresaId]);
   const permiteSaldoNegativo = parametroResult.rows[0]?.valor || 'N';
   
-  console.log(`📊 PERMITE_SALDO_NEGATIVO = ${permiteSaldoNegativo} (empresa ${empresaId})`);
+  console.log(`ðŸ“Š PERMITE_SALDO_NEGATIVO = ${permiteSaldoNegativo} (empresa ${empresaId})`);
   
-  // ✅ SE PERMITE SALDO NEGATIVO, NÃO VALIDAR ESTOQUE
+  // âœ… SE PERMITE SALDO NEGATIVO, NÃƒO VALIDAR ESTOQUE
   if (permiteSaldoNegativo === 'S') {
-    console.log('✅ Saldo negativo permitido - pulando validação de estoque');
-    return; // Não valida!
+    console.log('âœ… Saldo negativo permitido - pulando validaÃ§Ã£o de estoque');
+    return; // NÃ£o valida!
   }
   
-  // ✅ SE NÃO PERMITE, VALIDAR NORMALMENTE
-  console.log('🔒 Validando estoque (não permite saldo negativo)...');
+  // âœ… SE NÃƒO PERMITE, VALIDAR NORMALMENTE
+  console.log('ðŸ”’ Validando estoque (nÃ£o permite saldo negativo)...');
   
   for (const item of itens) {
     const sql = `
@@ -321,7 +362,7 @@ const validarEstoque = async (empresaId, itens) => {
     const result = await query(sql, [empresaId, item.id_produto]);
     
     if (result.rows.length === 0) {
-      throw new Error(`Produto ${item.descricao} não encontrado`);
+      throw new Error(`Produto ${item.descricao} nÃ£o encontrado`);
     }
     
     const saldoAtual = parseFloat(result.rows[0].saldo);
@@ -329,12 +370,12 @@ const validarEstoque = async (empresaId, itens) => {
     if (saldoAtual < parseFloat(item.quantidade)) {
       throw new Error(
         `Estoque insuficiente para ${item.descricao}. ` +
-        `Disponível: ${saldoAtual} - Solicitado: ${item.quantidade}`  // ✅ UTF-8 CORRIGIDO
+        `DisponÃ­vel: ${saldoAtual} - Solicitado: ${item.quantidade}`  // âœ… UTF-8 CORRIGIDO
       );
     }
   }
   
-  console.log('✅ Estoque validado - tudo OK');
+  console.log('âœ… Estoque validado - tudo OK');
 };
 
 // =====================================================
@@ -353,7 +394,7 @@ const darBaixaEstoque = async (empresaId, usuarioId, pedidoId, itens) => {
     
     await query(updateSql, [item.quantidade, empresaId, item.id_produto]);
     
-    // 2. Registrar movimentação
+    // 2. Registrar movimentaÃ§Ã£o
     const movSql = `
       INSERT INTO movimentacoes_estoque (
         id_empresa,
@@ -412,11 +453,11 @@ export const finalizarPedido = async (req, res) => {
       observacoes
     } = req.body;
     
-    // Validações
+    // ValidaÃ§Ãµes
     if (!cliente || !cliente.id) {
       return res.status(400).json({
         success: false,
-        message: 'Cliente não informado'
+        message: 'Cliente nÃ£o informado'
       });
     }
     
@@ -447,11 +488,11 @@ export const finalizarPedido = async (req, res) => {
     if (Math.abs(totalPagoArredondado - valorLiquidoArredondado) > 0.01) {
       return res.status(400).json({
         success: false,
-        message: 'Total dos pagamentos não confere com o valor do pedido'
+        message: 'Total dos pagamentos nÃ£o confere com o valor do pedido'
       });
     }
     
-    // ✅ VALIDAR ESTOQUE (COM PARÂMETRO)
+    // âœ… VALIDAR ESTOQUE (COM PARÃ‚METRO)
     await validarEstoque(empresaId, itens);
     
     // Buscar dados do cliente
@@ -463,7 +504,7 @@ export const finalizarPedido = async (req, res) => {
       [cliente.id]
     );
     
-    // Iniciar transação
+    // Iniciar transaÃ§Ã£o
     await query('BEGIN');
     
     try {
@@ -564,7 +605,7 @@ export const finalizarPedido = async (req, res) => {
       // 4. Dar baixa no estoque
       await darBaixaEstoque(empresaId, usuarioId, pedidoId, itens);
       
-      // Commit da transação
+      // Commit da transaÃ§Ã£o
       await query('COMMIT');
       
       res.json({
@@ -718,7 +759,7 @@ export const buscarPedido = async (req, res) => {
     if (pedidoResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Pedido não encontrado'
+        message: 'Pedido nÃ£o encontrado'
       });
     }
     
