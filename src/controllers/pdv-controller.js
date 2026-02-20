@@ -3,7 +3,7 @@
 // âœ… CORRIGIDO: ValidaÃ§Ã£o de estoque com parÃ¢metro
 // =====================================================
 
-import { query } from '../config/database.js';
+import { query, getClient } from '../config/database.js';
 
 // =====================================================
 // BUSCAR CLIENTES PARA PDV
@@ -379,258 +379,182 @@ const validarEstoque = async (empresaId, itens) => {
 };
 
 // =====================================================
-// DAR BAIXA NO ESTOQUE
+// DAR BAIXA NO ESTOQUE — usa client dedicado da transação
 // =====================================================
-const darBaixaEstoque = async (empresaId, usuarioId, pedidoId, itens) => {
+const darBaixaEstoque = async (client, empresaId, usuarioId, pedidoId, itens) => {
   for (const item of itens) {
     // 1. Atualizar saldo do produto
-    const updateSql = `
-      UPDATE produtos
-      SET saldo = saldo - $1,
-          updated_at = NOW()
-      WHERE id_empresa = $2 
-        AND id_produto = $3
-    `;
-    
-    await query(updateSql, [item.quantidade, empresaId, item.id_produto]);
-    
-    // 2. Registrar movimentaÃ§Ã£o
-    const movSql = `
-      INSERT INTO movimentacoes_estoque (
-        id_empresa,
-        id_produto,
-        id_usuario,
-        tipo,
-        quantidade,
-        saldo_anterior,
-        saldo_atual,
-        observacao,
-        id_pedido_venda
-      )
-      SELECT 
-        $1,
-        $2,
-        $3,
-        'S',
-        $4,
-        saldo + $4,
-        saldo,
-        $5,
-        $6
-      FROM produtos
-      WHERE id_produto = $2
-    `;
-    
-    const observacao = `Venda - Pedido #${pedidoId}`;
-    
-    await query(movSql, [
-      empresaId,
-      item.id_produto,
-      usuarioId,
-      item.quantidade,
-      observacao,
-      pedidoId
-    ]);
+    await client.query(
+      `UPDATE produtos
+       SET saldo = saldo - $1, updated_at = NOW()
+       WHERE id_empresa = $2 AND id_produto = $3`,
+      [item.quantidade, empresaId, item.id_produto]
+    );
+
+    // 2. Buscar saldo atual após a baixa
+    const saldoResult = await client.query(
+      `SELECT saldo FROM produtos WHERE id_produto = $1`,
+      [item.id_produto]
+    );
+    const saldoAtual    = parseFloat(saldoResult.rows[0]?.saldo || 0);
+    const saldoAnterior = saldoAtual + parseFloat(item.quantidade);
+
+    // 3. Registrar movimentação de estoque
+    await client.query(
+      `INSERT INTO movimentacoes_estoque (
+        id_empresa, id_produto, id_usuario, tipo,
+        quantidade, saldo_anterior, saldo_atual,
+        observacao, id_pedido_venda
+      ) VALUES ($1, $2, $3, 'S', $4, $5, $6, $7, $8)`,
+      [
+        empresaId, item.id_produto, usuarioId,
+        item.quantidade, saldoAnterior, saldoAtual,
+        `Venda - Pedido #${pedidoId}`, pedidoId
+      ]
+    );
   }
 };
 
 // =====================================================
 // FINALIZAR PEDIDO
+// ✅ CORRIGIDO: usa getClient() para garantir que
+//    BEGIN/COMMIT/ROLLBACK sejam na mesma conexão
 // =====================================================
 export const finalizarPedido = async (req, res) => {
+  console.log('📨 finalizarPedido chamado - iniciando processamento...');
+  const empresaId = req.empresa.id;
+  const usuarioId = req.user.id;
+  const {
+    numero, cliente, itens, pagamentos,
+    valor_bruto, desconto, acrescimo, valor_liquido, observacoes
+  } = req.body;
+
+  // Validações (fora da transação)
+  if (!cliente || !cliente.id) {
+    return res.status(400).json({ success: false, message: 'Cliente não informado' });
+  }
+  if (!itens || itens.length === 0) {
+    return res.status(400).json({ success: false, message: 'Nenhum item no pedido' });
+  }
+  if (!pagamentos || pagamentos.length === 0) {
+    return res.status(400).json({ success: false, message: 'Nenhuma forma de pagamento informada' });
+  }
+
+  // Validar total dos pagamentos descontando troco
+  const totalPago = pagamentos.reduce((sum, p) => {
+    return sum + ((parseFloat(p.valor) || 0) - (parseFloat(p.troco) || 0));
+  }, 0);
+  const totalPagoArredondado    = Math.round(totalPago * 100) / 100;
+  const valorLiquidoArredondado = Math.round(parseFloat(valor_liquido) * 100) / 100;
+
+  if (Math.abs(totalPagoArredondado - valorLiquidoArredondado) > 0.01) {
+    return res.status(400).json({
+      success: false,
+      message: 'Total dos pagamentos não confere com o valor do pedido'
+    });
+  }
+
+  // Validar estoque (fora da transação, usa query normal)
   try {
-    const empresaId = req.empresa.id;
-    const usuarioId = req.user.id;
-    const {
-      numero,
-      cliente,
-      itens,
-      pagamentos,
-      valor_bruto,
-      desconto,
-      acrescimo,
-      valor_liquido,
-      observacoes
-    } = req.body;
-    
-    // ValidaÃ§Ãµes
-    if (!cliente || !cliente.id) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cliente nÃ£o informado'
-      });
-    }
-    
-    if (!itens || itens.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Nenhum item no pedido'
-      });
-    }
-    
-    if (!pagamentos || pagamentos.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Nenhuma forma de pagamento informada'
-      });
-    }
-    
-    // Validar se o total dos pagamentos confere
-    const totalPago = pagamentos.reduce((sum, p) => {
-      const valor = parseFloat(p.valor) || 0;
-      const troco = parseFloat(p.troco) || 0;
-      return sum + (valor - troco);
-    }, 0);
-    
-    const totalPagoArredondado = Math.round(totalPago * 100) / 100;
-    const valorLiquidoArredondado = Math.round(parseFloat(valor_liquido) * 100) / 100;
-    
-    if (Math.abs(totalPagoArredondado - valorLiquidoArredondado) > 0.01) {
-      return res.status(400).json({
-        success: false,
-        message: 'Total dos pagamentos nÃ£o confere com o valor do pedido'
-      });
-    }
-    
-    // âœ… VALIDAR ESTOQUE (COM PARÃ‚METRO)
     await validarEstoque(empresaId, itens);
-    
-    // Buscar dados do cliente
-    const clienteData = await query(
-      `SELECT razao_social, 
-              CASE WHEN tipo = 'J' THEN cnpj ELSE cpf END as documento
-       FROM clientes 
-       WHERE id_cliente = $1`,
-      [cliente.id]
-    );
-    
-    // Iniciar transaÃ§Ã£o
-    await query('BEGIN');
-    
-    try {
-      // 1. Criar pedido de venda
-      const pedidoSql = `
-        INSERT INTO pedidos_venda (
-          id_empresa,
-          numero,
-          id_cliente,
-          nome_cliente,
-          cpf_cnpj_cliente,
-          id_usuario,
-          valor_bruto,
-          desconto,
-          acrescimo,
-          valor_liquido,
-          status,
-          observacoes,
-          data_finalizacao
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'F', $11, NOW())
-        RETURNING id_pedido_venda
-      `;
-      
-      const pedidoResult = await query(pedidoSql, [
-        empresaId,
-        numero,
-        cliente.id,
+  } catch (error) {
+    return res.status(400).json({ success: false, message: error.message });
+  }
+
+  // Buscar dados do cliente (fora da transação)
+  const clienteData = await query(
+    `SELECT razao_social,
+            CASE WHEN tipo = 'J' THEN cnpj ELSE cpf END as documento
+     FROM clientes WHERE id_cliente = $1`,
+    [cliente.id]
+  );
+  if (clienteData.rows.length === 0) {
+    return res.status(400).json({ success: false, message: 'Cliente não encontrado' });
+  }
+
+  // ✅ Obter client dedicado com timeout de segurança
+  const client = await getClient();
+
+  try {
+    await client.query('BEGIN');
+
+    // 1. Criar pedido de venda
+    const pedidoResult = await client.query(
+      `INSERT INTO pedidos_venda (
+        id_empresa, numero, id_cliente, nome_cliente, cpf_cnpj_cliente,
+        id_usuario, valor_bruto, desconto, acrescimo, valor_liquido,
+        status, observacoes, data_finalizacao
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'F',$11,NOW())
+      RETURNING id_pedido_venda`,
+      [
+        empresaId, numero, cliente.id,
         clienteData.rows[0].razao_social,
         clienteData.rows[0].documento,
-        usuarioId,
-        valor_bruto,
-        desconto || 0,
-        acrescimo || 0,
-        valor_liquido,
+        usuarioId, valor_bruto,
+        desconto || 0, acrescimo || 0, valor_liquido,
         observacoes || null
-      ]);
-      
-      const pedidoId = pedidoResult.rows[0].id_pedido_venda;
-      
-      // 2. Inserir itens
-      for (let i = 0; i < itens.length; i++) {
-        const item = itens[i];
-        
-        const itemSql = `
-          INSERT INTO pedidos_venda_itens (
-            id_pedido_venda,
-            id_empresa,
-            id_produto,
-            codigo_produto,
-            descricao,
-            descricao_complemento,
-            ean,
-            unidade,
-            quantidade,
-            valor_unitario,
-            valor_total,
-            sequencia
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        `;
-        
-        await query(itemSql, [
-          pedidoId,
-          empresaId,
-          item.id_produto,
-          item.codigo || null,
-          item.descricao,
-          item.descricao_complemento || null,
-          item.ean || null,
-          item.unidade,
-          item.quantidade,
-          item.valor_unitario,
-          item.valor_total,
-          i + 1
-        ]);
-      }
-      
-      // 3. Inserir pagamentos
-      for (const pagamento of pagamentos) {
-        const pagSql = `
-          INSERT INTO pedidos_venda_pagamentos (
-            id_pedido_venda,
-            id_empresa,
-            id_forma_pagamento,
-            valor,
-            troco
-          ) VALUES ($1, $2, $3, $4, $5)
-        `;
-        
-        await query(pagSql, [
-          pedidoId,
-          empresaId,
+      ]
+    );
+    const pedidoId = pedidoResult.rows[0].id_pedido_venda;
+
+    // 2. Inserir itens
+    for (let i = 0; i < itens.length; i++) {
+      const item = itens[i];
+      await client.query(
+        `INSERT INTO pedidos_venda_itens (
+          id_pedido_venda, id_empresa, id_produto, codigo_produto,
+          descricao, descricao_complemento, ean, unidade,
+          quantidade, valor_unitario, valor_total, sequencia
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [
+          pedidoId, empresaId, item.id_produto, item.codigo || null,
+          item.descricao, item.descricao_complemento || null,
+          item.ean || null, item.unidade,
+          item.quantidade, item.valor_unitario, item.valor_total, i + 1
+        ]
+      );
+    }
+
+    // 3. Inserir pagamentos
+    for (const pagamento of pagamentos) {
+      await client.query(
+        `INSERT INTO pedidos_venda_pagamentos (
+          id_pedido_venda, id_empresa, id_forma_pagamento, valor, troco
+        ) VALUES ($1,$2,$3,$4,$5)`,
+        [
+          pedidoId, empresaId,
           pagamento.id_forma_pagamento,
           pagamento.valor,
           pagamento.troco || 0
-        ]);
-      }
-      
-      // 4. Dar baixa no estoque
-      await darBaixaEstoque(empresaId, usuarioId, pedidoId, itens);
-      
-      // Commit da transaÃ§Ã£o
-      await query('COMMIT');
-      
-      res.json({
-        success: true,
-        message: 'Pedido finalizado com sucesso',
-        data: {
-          id_pedido: pedidoId,
-          numero: numero
-        }
-      });
-      
-    } catch (error) {
-      await query('ROLLBACK');
-      throw error;
+        ]
+      );
     }
-    
+
+    // 4. Dar baixa no estoque (usa o mesmo client da transação)
+    await darBaixaEstoque(client, empresaId, usuarioId, pedidoId, itens);
+
+    await client.query('COMMIT');
+
+    console.log(`✅ Pedido #${numero} finalizado com sucesso (id: ${pedidoId})`);
+
+    res.json({
+      success: true,
+      message: 'Pedido finalizado com sucesso',
+      data: { id_pedido: pedidoId, numero }
+    });
+
   } catch (error) {
-    console.error('Erro ao finalizar pedido:', error);
+    await client.query('ROLLBACK');
+    console.error('❌ Erro ao finalizar pedido — ROLLBACK executado:', error.message);
     res.status(500).json({
       success: false,
       message: error.message || 'Erro ao finalizar pedido'
     });
+  } finally {
+    // ✅ SEMPRE devolve o client ao pool
+    client.release();
   }
 };
-
 // =====================================================
 // LISTAR PEDIDOS
 // =====================================================

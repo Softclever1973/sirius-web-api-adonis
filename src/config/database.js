@@ -14,18 +14,19 @@ const { Pool } = pg;
 console.log('🔍 DATABASE_URL configurada:', process.env.DATABASE_URL ? 'SIM' : 'NÃO');
 console.log('🔍 Host:', process.env.DATABASE_URL?.split('@')[1]?.split(':')[0] || 'INDEFINIDO');
 
-// Configuração otimizada para serverless
+// Configuração otimizada por ambiente
 const poolConfig = {
   connectionString: process.env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
   },
-  // AJUSTES PARA VERCEL SERVERLESS
-  max: 1, // Apenas 1 conexão por função serverless
-  idleTimeoutMillis: 1000, // Fechar conexões ociosas rapidamente
-  connectionTimeoutMillis: 5000, // Timeout de conexão: 5 segundos
-  allowExitOnIdle: true, // Permitir que o processo termine
-  statement_timeout: 10000, // Timeout de query: 10 segundos
+  // Em produção (Vercel serverless): 1 conexão por função
+  // Em desenvolvimento (servidor persistente): até 10 simultâneas
+  max: process.env.NODE_ENV === 'production' ? 1 : 10,
+  idleTimeoutMillis: process.env.NODE_ENV === 'production' ? 1000 : 30000,
+  connectionTimeoutMillis: 5000,
+  allowExitOnIdle: true,
+  statement_timeout: 10000,
 };
 
 // Criar pool de conexões
