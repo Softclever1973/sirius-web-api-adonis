@@ -551,3 +551,49 @@ export const deletarProduto = async (req, res) => {
     });
   }
 };
+
+// =====================================================
+// TOGGLE STATUS PRODUTO (Ativar / Inativar)
+// PATCH /produtos/:id/toggle-status
+// =====================================================
+export const toggleStatusProduto = async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const produtoId = req.params.id;
+
+    // Buscar status atual
+    const resultado = await query(
+      'SELECT id_produto, status FROM produtos WHERE id_produto = $1 AND id_empresa = $2',
+      [produtoId, empresaId]
+    );
+
+    if (resultado.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Produto não encontrado'
+      });
+    }
+
+    const statusAtual = resultado.rows[0].status; // 'A' ou 'I'
+    const novoStatus  = statusAtual === 'A' ? 'I' : 'A';
+    const mensagem    = novoStatus === 'A' ? 'Produto ativado com sucesso' : 'Produto inativado com sucesso';
+
+    await query(
+      'UPDATE produtos SET status = $1 WHERE id_produto = $2 AND id_empresa = $3',
+      [novoStatus, produtoId, empresaId]
+    );
+
+    res.json({
+      success: true,
+      message: mensagem,
+      data: { status: novoStatus }
+    });
+
+  } catch (error) {
+    console.error('Erro ao alternar status do produto:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao alternar status do produto'
+    });
+  }
+};

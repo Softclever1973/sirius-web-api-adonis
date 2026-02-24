@@ -8,7 +8,8 @@ import {
   buscarProduto,
   criarProduto,
   atualizarProduto,
-  deletarProduto
+  deletarProduto,
+  toggleStatusProduto
 } from '../controllers/produtos-controller.js';
 import { authenticateToken } from '../middlewares/auth-middleware.js';
 import { setTenant } from '../middlewares/tenant-middleware.js';
@@ -34,6 +35,9 @@ router.post('/', criarProduto);
 
 // PUT /produtos/:id - Atualizar produto
 router.put('/:id', atualizarProduto);
+
+// PATCH /produtos/:id/toggle-status - Ativar ou Inativar produto
+router.patch('/:id/toggle-status', toggleStatusProduto);
 
 // DELETE /produtos/:id - Inativar produto (soft delete)
 router.delete('/:id', deletarProduto);
