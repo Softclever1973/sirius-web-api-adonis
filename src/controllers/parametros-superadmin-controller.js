@@ -10,20 +10,23 @@ import { query } from '../config/database.js';
 // =====================================================
 export const listarEmpresas = async (req, res) => {
   try {
+    const { id: idUsuario } = req.user; // ID do usuário logado
+    
     const sql = `
       SELECT 
-        id_empresa,
-        razao_social,
-        nome_fantasia,
-        cnpj,
-        plano,
-        status
-      FROM empresas
-      WHERE status = 'A'
-      ORDER BY razao_social
+        e.id_empresa,
+        e.razao_social,
+        e.nome_fantasia,
+        e.cnpj,
+        e.plano,
+        e.status
+      FROM empresas e
+      INNER JOIN usuario_empresa ue ON e.id_empresa = ue.id_empresa
+      WHERE e.status = 'A' AND ue.id_usuario = $1 AND ue.ativo = true
+      ORDER BY e.razao_social
     `;
     
-    const result = await query(sql);
+    const result = await query(sql, [idUsuario]);
     
     res.json({
       success: true,
