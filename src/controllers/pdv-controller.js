@@ -570,6 +570,7 @@ export const listarPedidos = async (req, res) => {
     const filtroPorNumero = req.query.numero;
     const filtroHoje = req.query.hoje === 'true';
     const dataInicial = req.query.data_inicial;
+    const dataFinal = req.query.data_final;
     const idCliente = req.query.id_cliente;
     
     let whereConditions = ['p.id_empresa = $1'];
@@ -590,6 +591,12 @@ export const listarPedidos = async (req, res) => {
       paramCount++;
       whereConditions.push(`DATE(p.created_at) >= $${paramCount}`);
       params.push(dataInicial);
+    }
+    
+    if (dataFinal) {
+      paramCount++;
+      whereConditions.push(`DATE(p.created_at) <= $${paramCount}`);
+      params.push(dataFinal);
     }
     
     if (idCliente) {
