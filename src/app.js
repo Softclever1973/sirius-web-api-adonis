@@ -5,6 +5,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from "path";
+import { fileURLToPath } from "url";
 
 // Importar rotas
 import authRoutes from './routes/auth-routes.js';
@@ -23,7 +25,10 @@ import parametrosSuperAdminRoutes from './routes/parametros-superadmin-routes.js
 
 // Configurar variáveis de ambiente
 dotenv.config();
+console.log('🔍 .env carregado, PORT do .env:', process.env.PORT); // Debug: verificar se .env foi lido
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 // Criar aplicação Express
 const app = express();
 
@@ -39,6 +44,9 @@ app.use(cors({
 
 // Body parser - JSON
 app.use(express.json());
+
+// Conexão com HTML estático
+app.use(express.static(path.join(__dirname, "../../sirius-web-frontend-adonis")));
 
 // Body parser - URL encoded
 app.use(express.urlencoded({ extended: true }));
