@@ -2,20 +2,23 @@
 // SIRIUS WEB API - Servidor
 // =====================================================
 
+import dotenv from 'dotenv';
+
 import app from './app.js';
 import pool from './config/database.js';
 
-const PORT = process.env.PORT || 3000;
-
+const PORT = process.env.PORT || 8042;
+console.log('✨ VARIÁVEL PORT FINAL:', PORT);
 // Testar conexão com banco antes de iniciar servidor
 async function startServer() {
   try {
     // Testar conexão
     await pool.query('SELECT NOW()');
     console.log('✅ Conexão com PostgreSQL estabelecida');
+    console.log('rodando na porta: ', PORT);
     
     // Iniciar servidor
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0',() => {
       console.log('');
       console.log('╔════════════════════════════════════════════════════════════╗');
       console.log('║            🚀 SIRIUS WEB API ONLINE                        ║');
