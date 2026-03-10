@@ -3,6 +3,7 @@
 // =====================================================
 
 import { query } from '../config/database.js';
+import bcrypt from 'bcryptjs';
 
 /**
  * GET /vendedores
@@ -168,7 +169,8 @@ export const criarVendedor = async (req, res) => {
       comissao,
       meta_vendas,
       observacoes,
-      status
+      status,
+      senha
     } = req.body;
     
     // Validações básicas
@@ -192,7 +194,13 @@ export const criarVendedor = async (req, res) => {
         message: 'E-mail é obrigatório'
       });
     }
-    
+    if (!senha){
+      return res.status(400).json({
+        success: false,
+        message: 'Senha é obrigatoria'
+      })
+    }
+      const senhaHash = await bcrypt.hash(senha, 10);
     console.log('✅ Validações OK. Inserindo vendedor com id_empresa:', idEmpresa);
     
     // Inserir vendedor
@@ -211,8 +219,9 @@ export const criarVendedor = async (req, res) => {
         comissao,
         meta_vendas,
         observacoes,
-        status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        status,
+        senha_hash
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *`,
       [
         idEmpresa,
@@ -228,9 +237,24 @@ export const criarVendedor = async (req, res) => {
         comissao,
         meta_vendas,
         observacoes,
-        status || 'A'
+        status || 'A',
+        senhaHash
       ]
     );
+
+    const userResult = await query(
+      `INSERT INTO usuarios (nome, sobrenome, email, senha_hash, celular, status, is_super_admin)
+       VALUES ($1, $2, $3, $4, $5, 'A', false)
+       RETURNING id_usuario, nome, email, celular`,
+      [nome || '', '' ,email.toLowerCase(), senhaHash, fone || null]
+    );
+    const usuario = userResult.rows[0];
+    await query(
+      `INSERT INTO usuario_empresa (id_usuario, id_empresa, is_admin, ativo)
+       VALUES ($1, $2, false, true)`,
+      [usuario.id_usuario,idEmpresa]
+    );
+    // TODO: Fazer um trigger para que quando o vendedor seja deletado, tudo seja deletado junto
     
     console.log('✅ Vendedor criado com sucesso! ID:', result.rows[0].id_vendedor);
     
