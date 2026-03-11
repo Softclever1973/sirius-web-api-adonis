@@ -17,7 +17,12 @@ export const register = async (req, res) => {
   try {
     await client.query('BEGIN');
     
-    const { nome, sobrenome, email, senha, celular, razao_social, cnpj } = req.body;
+    const {
+      nome, sobrenome, email, senha, celular,
+      razao_social, cnpj, telefone, email_empresa,
+      cep, logradouro_tipo, logradouro, numero, complemento,
+      bairro, municipio, uf
+    } = req.body;
     
     // Validações básicas
     if (!nome || !email || !senha || !razao_social || !cnpj) {
@@ -45,8 +50,8 @@ export const register = async (req, res) => {
     
     // Inserir usuário
     const userResult = await client.query(
-      `INSERT INTO usuarios (nome, sobrenome, email, senha_hash, celular, status)
-       VALUES ($1, $2, $3, $4, $5, 'A')
+      `INSERT INTO usuarios (nome, sobrenome, email, senha_hash, celular, status, is_super_admin)
+       VALUES ($1, $2, $3, $4, $5, 'A', true)
        RETURNING id_usuario, nome, sobrenome, email, celular`,
       [nome, sobrenome || '', email.toLowerCase(), senhaHash, celular || null]
     );
@@ -55,10 +60,19 @@ export const register = async (req, res) => {
     
     // Criar empresa
     const empresaResult = await client.query(
-      `INSERT INTO empresas (razao_social, nome_fantasia, cnpj, plano, status)
-       VALUES ($1, $2, $3, 'FREE', 'A')
-       RETURNING id_empresa, razao_social, nome_fantasia, cnpj, plano`,
-      [razao_social, razao_social, cnpj]
+      `INSERT INTO empresas (
+        razao_social, nome_fantasia, cnpj, telefone, email, plano, status,
+        cep, logradouro_tipo, logradouro, numero, complemento,
+        bairro, municipio, uf
+      ) VALUES ($1, $2, $3, $4, $5, 'FREE', 'A', $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING id_empresa, razao_social, nome_fantasia, cnpj, plano`,
+      [
+        razao_social, razao_social, cnpj,
+        telefone || null, email_empresa || null,
+        cep || null, logradouro_tipo || null, logradouro || null,
+        numero || null, complemento || null,
+        bairro || null, municipio || null, uf || null
+      ]
     );
     
     const empresa = empresaResult.rows[0];
@@ -68,6 +82,15 @@ export const register = async (req, res) => {
       `INSERT INTO usuario_empresa (id_usuario, id_empresa, is_admin, ativo)
        VALUES ($1, $2, true, true)`,
       [usuario.id_usuario, empresa.id_empresa]
+    );
+
+    await client.query(`
+      INSERT INTO formas_pagamento (id_empresa, codigo, descricao, permite_troco, ativo) 
+      VALUES ($1,'04','Cartão de Débito',false,true),
+        ($1,'01','Dinheiro',true,true),
+        ($1,'03','Cartão de Credito',false,true),
+        ($1,'17','PIX',false,true);`,
+      [empresa.id_empresa]
     );
     
     await client.query('COMMIT');
