@@ -20,6 +20,7 @@ import pedidosRoutes from './routes/pedidos-routes.js';
 import parametrosDefinicoesRoutes from './routes/parametros-definicoes-routes.js'; // ✅ NOVO
 import parametrosValoresRoutes from './routes/parametros-valores-routes.js'; // ✅ NOVO
 import parametrosSuperAdminRoutes from './routes/parametros-superadmin-routes.js'; // ✅ SUPER ADMIN
+import dashboardRoutes from './routes/dashboard-routes.js';
 
 // Configurar variáveis de ambiente
 dotenv.config();
@@ -94,6 +95,9 @@ app.use('/pdv', pdvRoutes);
 
 // Rotas de Pedidos (Consulta)
 app.use('/pdv', pedidosRoutes);
+
+// Rotas de Dashboard
+app.use('/dashboard', dashboardRoutes);
 
 // Rotas de Parâmetros ✅ ATUALIZADO
 app.use('/parametros/superadmin', parametrosSuperAdminRoutes); // Super Admin (configurar empresas)
