@@ -9,6 +9,16 @@ import bcrypt from 'bcryptjs';
  * GET /vendedores
  * Listar todos os vendedores da empresa
  */
+export const getClientes = async (req, res) => {
+  res.json({
+    success: true,
+    message: 'Vendedores carregado com sucesso.',
+    data:{
+      empresa: req.empresa
+    }
+  });
+};
+
 export const listarVendedores = async (req, res) => {
   try {
     // Buscar id_empresa de múltiplas fontes possíveis
