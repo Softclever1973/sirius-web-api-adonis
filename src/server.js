@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 import app from './app.js';
 import pool from './config/database.js';
 
-const PORT = process.env.PORT || 8042;
+const PORT = process.env.PORT || 3000;
 console.log('✨ VARIÁVEL PORT FINAL:', PORT);
 // Testar conexão com banco antes de iniciar servidor
 async function startServer() {
