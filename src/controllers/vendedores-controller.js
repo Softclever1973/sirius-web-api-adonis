@@ -211,12 +211,28 @@ export const criarVendedor = async (req, res) => {
       })
     }
       const senhaHash = await bcrypt.hash(senha, 10);
-    console.log('✅ Validações OK. Inserindo vendedor com id_empresa:', idEmpresa);
-    
-    // Inserir vendedor
+    console.log('✅ Validações OK. Criando usuário e vendedor com id_empresa:', idEmpresa);
+
+    // Criar usuário primeiro para obter o id_usuario
+    const userResult = await query(
+      `INSERT INTO usuarios (nome, sobrenome, email, senha_hash, celular, status, is_super_admin)
+       VALUES ($1, $2, $3, $4, $5, 'A', false)
+       RETURNING id_usuario, nome, email, celular`,
+      [nome || '', '', email.toLowerCase(), senhaHash, fone || null]
+    );
+    const usuario = userResult.rows[0];
+
+    await query(
+      `INSERT INTO usuario_empresa (id_usuario, id_empresa, is_admin, ativo)
+       VALUES ($1, $2, false, true)`,
+      [usuario.id_usuario, idEmpresa]
+    );
+
+    // Inserir vendedor com o id_usuario já vinculado
     const result = await query(
       `INSERT INTO vendedores (
         id_empresa,
+        id_user,
         nome,
         cpf,
         fone,
@@ -231,10 +247,11 @@ export const criarVendedor = async (req, res) => {
         observacoes,
         status,
         senha_hash
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *`,
       [
         idEmpresa,
+        usuario.id_usuario,
         nome,
         cpf,
         fone,
@@ -252,20 +269,6 @@ export const criarVendedor = async (req, res) => {
       ]
     );
 
-    const userResult = await query(
-      `INSERT INTO usuarios (nome, sobrenome, email, senha_hash, celular, status, is_super_admin)
-       VALUES ($1, $2, $3, $4, $5, 'A', false)
-       RETURNING id_usuario, nome, email, celular`,
-      [nome || '', '' ,email.toLowerCase(), senhaHash, fone || null]
-    );
-    const usuario = userResult.rows[0];
-    await query(
-      `INSERT INTO usuario_empresa (id_usuario, id_empresa, is_admin, ativo)
-       VALUES ($1, $2, false, true)`,
-      [usuario.id_usuario,idEmpresa]
-    );
-    // TODO: Fazer um trigger para que quando o vendedor seja deletado, tudo seja deletado junto
-    
     console.log('✅ Vendedor criado com sucesso! ID:', result.rows[0].id_vendedor);
     
     return res.status(201).json({
@@ -411,6 +414,17 @@ export const excluirVendedor = async (req, res) => {
       });
     }
     
+    const vendedor = await query(
+      `SELECT id_user FROM vendedores WHERE id_vendedor = $1 AND id_empresa = $2`, [id, idEmpresa]
+    );
+    if (vendedor.rows.length === 0){
+      return res.status(404).json({
+        success: false,
+        message: 'Vendedor não encontrado'
+      });
+    }
+    const idUser = vendedor.rows[0].id_user;
+    
     const result = await query(
       `DELETE FROM vendedores 
        WHERE id_vendedor = $1 AND id_empresa = $2
@@ -418,11 +432,8 @@ export const excluirVendedor = async (req, res) => {
       [id, idEmpresa]
     );
     
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Vendedor não encontrado'
-      });
+    if (idUser){
+      await query(`DELETE FROM usuarios WHERE id_usuario = $1`, [idUser]);
     }
     
     return res.status(200).json({
