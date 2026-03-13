@@ -178,6 +178,16 @@ export const buscarCliente = async (req, res) => {
 export const criarCliente = async (req, res) => {
   try {
     const empresaId = req.empresa.id;
+
+    let id_vendedor = null;
+    if (req.user?.email) {
+      const vendedorResult = await query(
+        'SELECT id_vendedor FROM vendedores WHERE email = $1 AND id_empresa = $2',[req.user.email, empresaId]
+      );
+      if (vendedorResult.rows.length > 0){
+        id_vendedor = vendedorResult.rows[0].id_vendedor;
+      }
+    }
     const {
       tipo,
       razao_social,
@@ -190,7 +200,6 @@ export const criarCliente = async (req, res) => {
       inscricao_municipal,
       contato,
       nome_contato,
-      id_vendedor,
       id_lista_preco,
       id_condicao_pagamento,
       ativo

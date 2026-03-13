@@ -142,7 +142,7 @@ export const login = async (req, res) => {
     
     // Buscar usuário por email
     const result = await query(
-      `SELECT id_usuario, nome, sobrenome, email, senha_hash, celular, status
+      `SELECT id_usuario, nome, sobrenome, email, senha_hash, celular, status, is_super_admin
        FROM usuarios
        WHERE email = $1`,
       [email.toLowerCase()]
@@ -253,7 +253,8 @@ export const login = async (req, res) => {
           nome: usuario.nome,
           sobrenome: usuario.sobrenome,
           email: usuario.email,
-          celular: usuario.celular
+          celular: usuario.celular,
+          is_super_admin: usuario.is_super_admin
         },
         empresas: empresas.map(emp => ({
           id: emp.id_empresa,
