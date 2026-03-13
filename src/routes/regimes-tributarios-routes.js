@@ -14,6 +14,11 @@ import { authenticateToken } from '../middlewares/auth-middleware.js';
 
 const router = express.Router();
 
+// ROTA BLOQUEADA — nenhum acesso permitido
+router.use((req, res) => {
+  res.status(403).json({ success: false, message: 'Módulo indisponível.' });
+});
+
 // Todas as rotas exigem autenticação (não usa tenant pois é global)
 router.use(authenticateToken);
 
