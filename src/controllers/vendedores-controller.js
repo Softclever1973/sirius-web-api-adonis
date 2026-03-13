@@ -180,7 +180,8 @@ export const criarVendedor = async (req, res) => {
       meta_vendas,
       observacoes,
       status,
-      senha
+      senha,
+      isAdmin
     } = req.body;
     
     // Validações básicas
@@ -224,8 +225,8 @@ export const criarVendedor = async (req, res) => {
 
     await query(
       `INSERT INTO usuario_empresa (id_usuario, id_empresa, is_admin, ativo)
-       VALUES ($1, $2, false, true)`,
-      [usuario.id_usuario, idEmpresa]
+       VALUES ($1, $2, $3, true)`,
+      [usuario.id_usuario, idEmpresa, isAdmin]
     );
 
     // Inserir vendedor com o id_usuario já vinculado
@@ -321,7 +322,8 @@ export const atualizarVendedor = async (req, res) => {
       comissao,
       meta_vendas,
       observacoes,
-      status
+      status,
+      isAdmin
     } = req.body;
     
     // Validações básicas
@@ -369,6 +371,7 @@ export const atualizarVendedor = async (req, res) => {
         idEmpresa
       ]
     );
+    const result2 = await query(`UPDATE usuario_empresa SET is_admin = $1, ativo = $2 WHERE id_usuario = $3`, [isAdmin, status === 'A' ? true : false, result.rows[0].id_user])
     
     if (result.rows.length === 0) {
       return res.status(404).json({
