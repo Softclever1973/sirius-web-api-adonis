@@ -3,7 +3,7 @@
 // =====================================================
 
 import express from 'express';
-import { register, login, me } from '../controllers/auth-controller.js';
+import { register, login, me, changePassword } from '../controllers/auth-controller.js';
 import { authenticateToken } from '../middlewares/auth-middleware.js';
 
 const router = express.Router();
@@ -55,5 +55,20 @@ router.post('/login', login);
  * Authorization: Bearer <token>
  */
 router.get('/me', authenticateToken, me);
+
+/**
+ * PUT /auth/change-password
+ * Altera a senha do usuário logado
+ *
+ * Headers:
+ * Authorization: Bearer <token>
+ *
+ * Body:
+ * {
+ *   "senha_atual": "senhaAtual123",
+ *   "nova_senha": "novaSenha456"
+ * }
+ */
+router.put('/change-password', authenticateToken, changePassword);
 
 export default router;

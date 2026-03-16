@@ -308,6 +308,61 @@ export const login = async (req, res) => {
 };
 
 /**
+ * PUT /auth/change-password
+ * Altera a senha do usuário logado
+ */
+export const changePassword = async (req, res) => {
+  try {
+    const { senha_atual, nova_senha } = req.body;
+    const userId = req.user.id;
+
+    if (!senha_atual || !nova_senha) {
+      return res.status(400).json({
+        success: false,
+        message: 'Senha atual e nova senha são obrigatórias.'
+      });
+    }
+
+    if (nova_senha.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'A nova senha deve ter pelo menos 6 caracteres.'
+      });
+    }
+
+    const result = await query(
+      'SELECT senha_hash FROM usuarios WHERE id_usuario = $1',
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Usuário não encontrado.' });
+    }
+
+    const senhaCorreta = await bcrypt.compare(senha_atual, result.rows[0].senha_hash);
+    if (!senhaCorreta) {
+      return res.status(401).json({ success: false, message: 'Senha atual incorreta.' });
+    }
+
+    const novaSenhaHash = await bcrypt.hash(nova_senha, 10);
+
+    await query(
+      'UPDATE usuarios SET senha_hash = $1 WHERE id_usuario = $2',
+      [novaSenhaHash, userId]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Senha alterada com sucesso!'
+    });
+
+  } catch (error) {
+    console.error('Erro ao alterar senha:', error);
+    return handleAuthError(res, error);
+  }
+};
+
+/**
  * GET /auth/me
  * Retorna dados do usuário logado
  */
