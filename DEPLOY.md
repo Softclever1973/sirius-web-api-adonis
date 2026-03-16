@@ -136,11 +136,11 @@ Quando terminar, você verá:
 ✅ Deployment Ready
 ```
 
-**URL da sua API:** `https://sirius-web-api-adonis.vercel.app` (ou similar)
+**URL da sua API:** `https://sirius-web-api-adonis-pearl.vercel.app` (ou similar)
 
 **Teste no navegador:**
 ```
-https://sirius-web-api-adonis.vercel.app/
+https://sirius-web-api-adonis-pearl.vercel.app/
 ```
 
 Deve retornar:
@@ -165,23 +165,23 @@ Deve retornar:
 
 1. **Duplique** todas as requests
 2. **Renomeie** adicionando "- VERCEL" no final
-3. **Substitua** `http://localhost:3000` por `https://sirius-web-api-adonis.vercel.app`
+3. **Substitua** `http://localhost:3000` por `https://sirius-web-api-adonis-pearl.vercel.app`
 4. **Teste cada endpoint!**
 
 **Exemplo:**
 - Local: `http://localhost:3000/auth/login`
-- Vercel: `https://sirius-web-api-adonis.vercel.app/auth/login`
+- Vercel: `https://sirius-web-api-adonis-pearl.vercel.app/auth/login`
 
 ### Usando cURL (Terminal)
 
 **1. Health Check:**
 ```bash
-curl https://sirius-web-api-adonis.vercel.app/
+curl https://sirius-web-api-adonis-pearl.vercel.app/
 ```
 
 **2. Registrar empresa:**
 ```bash
-curl -X POST https://sirius-web-api-adonis.vercel.app/auth/register \
+curl -X POST https://sirius-web-api-adonis-pearl.vercel.app/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "nome": "Teste",
@@ -204,7 +204,7 @@ curl -X POST https://sirius-web-api-adonis.vercel.app/auth/register \
 
 **3. Login:**
 ```bash
-curl -X POST https://sirius-web-api-adonis.vercel.app/auth/login \
+curl -X POST https://sirius-web-api-adonis-pearl.vercel.app/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "teste@vercel.com",
@@ -341,7 +341,7 @@ git push -u origin main
 4. Configure variáveis (DATABASE_URL e JWT_SECRET do .env local)
 5. Deploy!
 6. Aguardar 2 minutos
-7. Testar: https://sirius-web-api-adonis.vercel.app/
+7. Testar: https://sirius-web-api-adonis-pearl.vercel.app/
 ```
 
 **Pronto! API no ar! 🚀**
