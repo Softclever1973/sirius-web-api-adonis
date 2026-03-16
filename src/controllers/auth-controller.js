@@ -7,6 +7,43 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { query, getClient } from '../config/database.js';
 
+function handleAuthError(res, error) {
+  if (error.code === '23505') {
+    const mensagens = {
+      'usuarios_email_key':  'Este e-mail já está cadastrado.',
+      'empresas_cnpj_key':   'Este CNPJ já está cadastrado.',
+      'empresas_email_key':  'Este e-mail de empresa já está em uso.',
+    };
+    const mensagem = mensagens[error.constraint] ?? 'Dado duplicado. Verifique as informações.';
+    return res.status(409).json({ success: false, message: mensagem });
+  }
+
+  if (error.code === '23502') {
+    return res.status(400).json({
+      success: false,
+      message: `O campo "${error.column}" é obrigatório.`
+    });
+  }
+
+  if (error.code === '23503') {
+    return res.status(400).json({ success: false, message: 'Referência inválida. Verifique os dados informados.' });
+  }
+
+  if (error.code === '08006' || error.code === '08001') {
+    return res.status(503).json({ success: false, message: 'Serviço temporariamente indisponível. Tente novamente em instantes.' });
+  }
+
+  if (error.name === 'JsonWebTokenError') {
+    return res.status(401).json({ success: false, message: 'Token inválido.' });
+  }
+
+  if (error.name === 'TokenExpiredError') {
+    return res.status(401).json({ success: false, message: 'Sua sessão expirou. Faça login novamente.' });
+  }
+
+  return res.status(500).json({ success: false, message: 'Erro interno. Tente novamente.' });
+}
+
 /**
  * POST /auth/register
  * Registrar novo usuário
@@ -114,11 +151,7 @@ export const register = async (req, res) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Erro no registro:', error);
-    
-    return res.status(500).json({
-      success: false,
-      message: 'Erro ao realizar cadastro. Tente novamente.'
-    });
+    return handleAuthError(res, error);
   } finally {
     client.release();
   }
@@ -270,11 +303,7 @@ export const login = async (req, res) => {
     
   } catch (error) {
     console.error('Erro no login:', error);
-    
-    return res.status(500).json({
-      success: false,
-      message: 'Erro ao realizar login. Tente novamente.'
-    });
+    return handleAuthError(res, error);
   }
 };
 
@@ -343,10 +372,6 @@ export const me = async (req, res) => {
     
   } catch (error) {
     console.error('Erro ao buscar dados do usuário:', error);
-    
-    return res.status(500).json({
-      success: false,
-      message: 'Erro ao buscar dados do usuário'
-    });
+    return handleAuthError(res, error);
   }
 };
