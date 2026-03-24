@@ -556,6 +556,59 @@ export const finalizarPedido = async (req, res) => {
   }
 };
 // =====================================================
+// TOTAIS POR FORMA DE PAGAMENTO (Dashboard)
+// =====================================================
+export const totaisFormasPagamento = async (req, res) => {
+  try {
+    const empresaId  = req.empresa.id;
+    const filtroHoje = req.query.hoje === 'true';
+    const dataInicial = req.query.data_inicial;
+    const dataFinal   = req.query.data_final;
+
+    let whereConditions = ['pv.id_empresa = $1', "pv.status = 'F'"];
+    let params = [empresaId];
+    let paramCount = 1;
+
+    if (filtroHoje) {
+      whereConditions.push('DATE(pv.created_at) = CURRENT_DATE');
+    }
+    if (dataInicial) {
+      paramCount++;
+      whereConditions.push(`DATE(pv.created_at) >= $${paramCount}`);
+      params.push(dataInicial);
+    }
+    if (dataFinal) {
+      paramCount++;
+      whereConditions.push(`DATE(pv.created_at) <= $${paramCount}`);
+      params.push(dataFinal);
+    }
+
+    const whereClause = whereConditions.join(' AND ');
+
+    const sql = `
+      SELECT
+        fp.id_forma_pagamento,
+        fp.descricao,
+        fp.codigo,
+        SUM(pvp.valor - pvp.troco) AS total
+      FROM pedidos_venda_pagamentos pvp
+      JOIN pedidos_venda pv ON pv.id_pedido_venda = pvp.id_pedido_venda
+      JOIN formas_pagamento fp ON fp.id_forma_pagamento = pvp.id_forma_pagamento
+      WHERE ${whereClause}
+      GROUP BY fp.id_forma_pagamento, fp.descricao, fp.codigo
+      ORDER BY total DESC
+    `;
+
+    const result = await query(sql, params);
+
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('Erro ao buscar totais formas pagamento:', error);
+    res.status(500).json({ success: false, message: 'Erro ao buscar totais de pagamento' });
+  }
+};
+
+// =====================================================
 // LISTAR PEDIDOS
 // =====================================================
 export const listarPedidos = async (req, res) => {

@@ -4,16 +4,17 @@
 // =====================================================
 
 import express from 'express';
-import { 
+import {
   buscarClientes,
   buscarProdutos,
   obterPrimeiroCliente,
-  obterClientePorId,  // ✅ NOVO
+  obterClientePorId,
   listarFormasPagamento,
   obterProximoNumero,
   finalizarPedido,
   listarPedidos,
-  buscarPedido
+  buscarPedido,
+  totaisFormasPagamento
 } from '../controllers/pdv-controller.js';
 import { authenticateToken } from '../middlewares/auth-middleware.js';
 import { setTenant } from '../middlewares/tenant-middleware.js';
@@ -52,6 +53,9 @@ router.get('/proximo-numero', obterProximoNumero);
 
 // Listar pedidos
 router.get('/pedidos', listarPedidos);
+
+// Totais por forma de pagamento (Dashboard)
+router.get('/pedidos/totais-formas', totaisFormasPagamento);
 
 // Buscar pedido por ID
 router.get('/pedidos/:id', buscarPedido);
