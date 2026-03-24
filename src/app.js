@@ -48,6 +48,7 @@ app.use(express.json());
 
 // Conexão com HTML estático
 app.use(express.static(path.join(__dirname, "../../sirius-web-frontend-adonis")));
+app.use(express.static(path.join(__dirname, "../../sirius-web-ia-frontend")));
 
 // Body parser - URL encoded
 app.use(express.urlencoded({ extended: true }));

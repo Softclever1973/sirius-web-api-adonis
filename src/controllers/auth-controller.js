@@ -5,7 +5,9 @@
 
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { query, getClient } from '../config/database.js';
+import { sendPasswordResetEmail } from '../services/emailService.js';
 
 function handleAuthError(res, error) {
   if (error.code === '23505') {
@@ -359,6 +361,96 @@ export const changePassword = async (req, res) => {
   } catch (error) {
     console.error('Erro ao alterar senha:', error);
     return handleAuthError(res, error);
+  }
+};
+
+/**
+ * POST /auth/forgot-password
+ * Solicita redefinição de senha — envia email com token
+ */
+export const forgotPassword = async (req, res) => {
+  const { email, baseUrl: baseUrlBody } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ success: false, message: 'E-mail é obrigatório.' });
+  }
+
+  try {
+    const result = await query(
+      "SELECT id_usuario, nome FROM usuarios WHERE email = $1 AND status = 'A'",
+      [email.toLowerCase()]
+    );
+
+    // Responde igual independente de o email existir (evita enumeração)
+    const mensagemPadrao = 'Se o e-mail estiver cadastrado, você receberá as instruções em breve.';
+
+    if (result.rows.length === 0) {
+      return res.status(200).json({ success: true, message: mensagemPadrao });
+    }
+
+    const usuario = result.rows[0];
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+
+    await query(
+      'UPDATE usuarios SET reset_token = $1, reset_token_expiry = $2 WHERE id_usuario = $3',
+      [token, expiry, usuario.id_usuario]
+    );
+
+    const baseUrl = (baseUrlBody || req.headers.origin || process.env.FRONTEND_URL || '').replace(/\/$/, '');
+
+    await sendPasswordResetEmail(email.toLowerCase(), usuario.nome, token, baseUrl);
+
+    console.log(`✅ Reset de senha solicitado: ${email}`);
+    return res.status(200).json({ success: true, message: mensagemPadrao });
+
+  } catch (error) {
+    console.error('Erro ao solicitar reset de senha:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao processar solicitação. Tente novamente.' });
+  }
+};
+
+/**
+ * POST /auth/reset-password
+ * Valida token e salva nova senha
+ */
+export const resetPassword = async (req, res) => {
+  const { token, nova_senha } = req.body;
+
+  if (!token || !nova_senha) {
+    return res.status(400).json({ success: false, message: 'Token e nova senha são obrigatórios.' });
+  }
+
+  if (nova_senha.length < 6) {
+    return res.status(400).json({ success: false, message: 'A nova senha deve ter pelo menos 6 caracteres.' });
+  }
+
+  try {
+    const result = await query(
+      "SELECT id_usuario FROM usuarios WHERE reset_token = $1 AND reset_token_expiry > NOW()",
+      [token]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Link inválido ou expirado. Solicite uma nova redefinição de senha.'
+      });
+    }
+
+    const novaSenhaHash = await bcrypt.hash(nova_senha, 10);
+
+    await query(
+      'UPDATE usuarios SET senha_hash = $1, reset_token = NULL, reset_token_expiry = NULL WHERE id_usuario = $2',
+      [novaSenhaHash, result.rows[0].id_usuario]
+    );
+
+    console.log(`✅ Senha redefinida para usuário ${result.rows[0].id_usuario}`);
+    return res.status(200).json({ success: true, message: 'Senha redefinida com sucesso! Você já pode fazer login.' });
+
+  } catch (error) {
+    console.error('Erro ao redefinir senha:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao redefinir senha. Tente novamente.' });
   }
 };
 

@@ -3,7 +3,7 @@
 // =====================================================
 
 import express from 'express';
-import { register, login, me, changePassword } from '../controllers/auth-controller.js';
+import { register, login, me, changePassword, forgotPassword, resetPassword } from '../controllers/auth-controller.js';
 import { authenticateToken } from '../middlewares/auth-middleware.js';
 
 const router = express.Router();
@@ -70,5 +70,21 @@ router.get('/me', authenticateToken, me);
  * }
  */
 router.put('/change-password', authenticateToken, changePassword);
+
+/**
+ * POST /auth/forgot-password
+ * Solicita redefinição de senha (envia e-mail com link)
+ *
+ * Body: { "email": "joao@exemplo.com" }
+ */
+router.post('/forgot-password', forgotPassword);
+
+/**
+ * POST /auth/reset-password
+ * Valida token e salva nova senha
+ *
+ * Body: { "token": "...", "nova_senha": "..." }
+ */
+router.post('/reset-password', resetPassword);
 
 export default router;
