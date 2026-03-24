@@ -145,7 +145,8 @@ export const register = async (req, res) => {
         },
         empresa: {
           id: empresa.id_empresa,
-          razao_social: empresa.razao_social
+          razao_social: empresa.razao_social,
+          nome_fantasia: empresa.nome_fantasia
         }
       }
     });
