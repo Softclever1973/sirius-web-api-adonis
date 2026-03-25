@@ -418,7 +418,7 @@ export const excluirVendedor = async (req, res) => {
     }
     
     const vendedor = await query(
-      `SELECT id_user FROM vendedores WHERE id_vendedor = $1 AND id_empresa = $2`, [id, idEmpresa]
+      `SELECT v.id_user, ue.is_admin FROM vendedores v LEFT JOIN usuario_empresa ue ON ue.id_usuario = v.id_user AND ue.id_empresa = $2 WHERE v.id_vendedor = $1 AND v.id_empresa = $2`, [id, idEmpresa]
     );
     if (vendedor.rows.length === 0){
       return res.status(404).json({
@@ -426,6 +426,15 @@ export const excluirVendedor = async (req, res) => {
         message: 'Vendedor não encontrado'
       });
     }
+
+    const vendorIsAdmin = vendedor.rows[0].is_admin;
+    if (vendorIsAdmin && !req.isSuperAdmin){
+      return res.status(403).json({
+        success: false,
+        message: 'Apenas Super Admins podem excluir vendedores com permissão de admin.'
+      })
+    }
+
     const idUser = vendedor.rows[0].id_user;
     
     const result = await query(

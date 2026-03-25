@@ -50,6 +50,38 @@ export const isSuperAdmin = async (req, res, next) => {
   }
 };
 
+export const checkIsSuperAdmin = async (userId) => {
+  const result = await query ('SELECT is_super_admin FROM usuarios WHERE id_usuario = $1', [userId]);
+  if (result.rows.length === 0) return null;
+  return result.rows[0].is_super_admin === true;
+};
+
+export const isSuperAdminOrAdmin = async (req, res, next) => {
+  try {
+    const isSuperAdm = await checkIsSuperAdmin(req.user.id);
+    if (isSuperAdm === null) return res.status(404).json({
+      success: false,
+      message: 'Usuário não encontrado'
+    });
+    if (isSuperAdm){
+      req.isSuperAdmin = true;
+      return next();
+    }
+  
+  if (req.empresa.is_admin) return next();
+
+  return res.status(403).json({
+    success: false,
+    message: 'Apenas Super Admin podem deletar Admins'
+  });
+}catch(error){
+  res.status(500).json({
+    success: false,
+    message: 'Erro ao verificar permissões'
+  });
+};
+}
+
 // =====================================================
 // DIFERENÇA: isAdmin vs isSuperAdmin
 // =====================================================
