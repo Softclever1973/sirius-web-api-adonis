@@ -36,27 +36,29 @@ export const listarVendedores = async (req, res) => {
     }
     
     const result = await query(
-      `SELECT 
-        id_vendedor,
-        id_empresa,
-        nome,
-        cpf,
-        fone,
-        email,
-        endereco,
-        complemento,
-        cidade,
-        uf,
-        cep,
-        comissao,
-        meta_vendas,
-        status,
-        observacoes,
-        created_at,
-        updated_at
-       FROM vendedores 
-       WHERE id_empresa = $1 
-       ORDER BY nome`,
+      `SELECT
+        v.id_vendedor,
+        v.id_empresa,
+        v.nome,
+        v.cpf,
+        v.fone,
+        v.email,
+        v.endereco,
+        v.complemento,
+        v.cidade,
+        v.uf,
+        v.cep,
+        v.comissao,
+        v.meta_vendas,
+        v.status,
+        v.observacoes,
+        v.created_at,
+        v.updated_at,
+        ue.is_admin
+       FROM vendedores v
+       LEFT JOIN usuario_empresa ue ON ue.id_usuario = v.id_user AND ue.id_empresa = v.id_empresa
+       WHERE v.id_empresa = $1
+       ORDER BY v.nome`,
       [idEmpresa]
     );
     
