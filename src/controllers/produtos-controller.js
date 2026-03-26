@@ -5,6 +5,7 @@
 // =====================================================
 
 import { query } from '../config/database.js';
+import { registrarLog } from '../services/audit-service.js';
 
 // =====================================================
 // LISTAR PRODUTOS (com paginação e filtros)
@@ -355,7 +356,16 @@ export const criarProduto = async (req, res) => {
       message: 'Produto criado com sucesso',
       data: result.rows[0]
     });
-    
+
+    registrarLog({
+      req,
+      acao: 'CRIOU',
+      modulo: 'Produtos',
+      id_registro: result.rows[0].id,
+      descricao: `Criou o produto "${result.rows[0].descricao}" (código: ${result.rows[0].codigo})`,
+      dados_novos: result.rows[0]
+    });
+
   } catch (error) {
     console.error('Erro ao criar produto:', error);
     res.status(500).json({
@@ -374,19 +384,25 @@ export const atualizarProduto = async (req, res) => {
     const produtoId = req.params.id;
     const dados = req.body;
     
-    // Verificar se produto existe
+    // Verificar se produto existe e guardar dados anteriores para o log
     const produtoExiste = await query(
-      'SELECT id_produto FROM produtos WHERE id_produto = $1 AND id_empresa = $2',
+      `SELECT id_produto as id, codigo, ean as codigo_barras, descricao, descricao_complemento,
+       unidade_comercial as unidade, custo as preco_custo, valor_venda as preco_venda,
+       saldo as estoque_atual, estoque_minimo, estoque_maximo,
+       CASE WHEN status = 'A' THEN 'S' ELSE 'N' END as ativo, ativo_pdv, observacoes
+       FROM produtos WHERE id_produto = $1 AND id_empresa = $2`,
       [produtoId, empresaId]
     );
-    
+
     if (produtoExiste.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Produto não encontrado'
       });
     }
-    
+
+    const dadosAnterioresProduto = produtoExiste.rows[0];
+
     // Se mudou o código, verificar duplicidade
     if (dados.codigo) {
       const codigoExiste = await query(
@@ -501,7 +517,17 @@ export const atualizarProduto = async (req, res) => {
       message: 'Produto atualizado com sucesso',
       data: result.rows[0]
     });
-    
+
+    registrarLog({
+      req,
+      acao: 'ALTEROU',
+      modulo: 'Produtos',
+      id_registro: result.rows[0].id,
+      descricao: `Alterou o produto "${result.rows[0].descricao}" (código: ${result.rows[0].codigo})`,
+      dados_anteriores: dadosAnterioresProduto,
+      dados_novos: result.rows[0]
+    });
+
   } catch (error) {
     console.error('Erro ao atualizar produto:', error);
     res.status(500).json({
@@ -519,19 +545,23 @@ export const deletarProduto = async (req, res) => {
     const empresaId = req.empresa.id;
     const produtoId = req.params.id;
     
-    // Verificar se produto existe
+    // Verificar se produto existe e guardar dados anteriores para o log
     const produtoExiste = await query(
-      'SELECT id_produto FROM produtos WHERE id_produto = $1 AND id_empresa = $2',
+      `SELECT id_produto as id, codigo, descricao,
+       CASE WHEN status = 'A' THEN 'S' ELSE 'N' END as ativo
+       FROM produtos WHERE id_produto = $1 AND id_empresa = $2`,
       [produtoId, empresaId]
     );
-    
+
     if (produtoExiste.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Produto não encontrado'
       });
     }
-    
+
+    const dadosAnterioresProduto = produtoExiste.rows[0];
+
     // Soft delete (marcar como inativo - status = 'I')
     await query(
       'UPDATE produtos SET status = $1 WHERE id_produto = $2 AND id_empresa = $3',
@@ -542,7 +572,16 @@ export const deletarProduto = async (req, res) => {
       success: true,
       message: 'Produto inativado com sucesso'
     });
-    
+
+    registrarLog({
+      req,
+      acao: 'EXCLUIU',
+      modulo: 'Produtos',
+      id_registro: produtoId,
+      descricao: `Inativou o produto "${dadosAnterioresProduto.descricao}" (código: ${dadosAnterioresProduto.codigo})`,
+      dados_anteriores: dadosAnterioresProduto
+    });
+
   } catch (error) {
     console.error('Erro ao deletar produto:', error);
     res.status(500).json({
@@ -561,9 +600,9 @@ export const toggleStatusProduto = async (req, res) => {
     const empresaId = req.empresa.id;
     const produtoId = req.params.id;
 
-    // Buscar status atual
+    // Buscar dados atuais para o log
     const resultado = await query(
-      'SELECT id_produto, status FROM produtos WHERE id_produto = $1 AND id_empresa = $2',
+      `SELECT id_produto as id, codigo, descricao, status FROM produtos WHERE id_produto = $1 AND id_empresa = $2`,
       [produtoId, empresaId]
     );
 
@@ -587,6 +626,16 @@ export const toggleStatusProduto = async (req, res) => {
       success: true,
       message: mensagem,
       data: { status: novoStatus }
+    });
+
+    registrarLog({
+      req,
+      acao: 'ALTEROU',
+      modulo: 'Produtos',
+      id_registro: produtoId,
+      descricao: `${novoStatus === 'A' ? 'Ativou' : 'Inativou'} o produto "${resultado.rows[0].descricao}"`,
+      dados_anteriores: { status: statusAtual },
+      dados_novos: { status: novoStatus }
     });
 
   } catch (error) {

@@ -4,6 +4,7 @@
 
 import { query } from '../config/database.js';
 import bcrypt from 'bcryptjs';
+import { registrarLog } from '../services/audit-service.js';
 
 /**
  * GET /vendedores
@@ -273,7 +274,16 @@ export const criarVendedor = async (req, res) => {
     );
 
     console.log('✅ Vendedor criado com sucesso! ID:', result.rows[0].id_vendedor);
-    
+
+    registrarLog({
+      req,
+      acao: 'CRIOU',
+      modulo: 'Vendedores',
+      id_registro: result.rows[0].id_vendedor,
+      descricao: `Criou o vendedor "${result.rows[0].nome}"`,
+      dados_novos: { id_vendedor: result.rows[0].id_vendedor, nome: result.rows[0].nome, email: result.rows[0].email }
+    });
+
     return res.status(201).json({
       success: true,
       message: 'Vendedor criado com sucesso',
@@ -335,7 +345,14 @@ export const atualizarVendedor = async (req, res) => {
         message: 'Nome é obrigatório'
       });
     }
-    
+
+    // Buscar dados anteriores para o log
+    const vendedorAtual = await query(
+      'SELECT id_vendedor, nome, email, fone, status FROM vendedores WHERE id_vendedor = $1 AND id_empresa = $2',
+      [id, idEmpresa]
+    );
+    const dadosAnterioresVendedor = vendedorAtual.rows[0] || null;
+
     // Atualizar vendedor
     const result = await query(
       `UPDATE vendedores SET
@@ -381,7 +398,17 @@ export const atualizarVendedor = async (req, res) => {
         message: 'Vendedor não encontrado'
       });
     }
-    
+
+    registrarLog({
+      req,
+      acao: 'ALTEROU',
+      modulo: 'Vendedores',
+      id_registro: id,
+      descricao: `Alterou o vendedor "${result.rows[0].nome}"`,
+      dados_anteriores: dadosAnterioresVendedor,
+      dados_novos: { id_vendedor: result.rows[0].id_vendedor, nome: result.rows[0].nome, email: result.rows[0].email }
+    });
+
     return res.status(200).json({
       success: true,
       message: 'Vendedor atualizado com sucesso',
@@ -420,7 +447,11 @@ export const excluirVendedor = async (req, res) => {
     }
     
     const vendedor = await query(
-      `SELECT v.id_user, ue.is_admin FROM vendedores v LEFT JOIN usuario_empresa ue ON ue.id_usuario = v.id_user AND ue.id_empresa = $2 WHERE v.id_vendedor = $1 AND v.id_empresa = $2`, [id, idEmpresa]
+      `SELECT v.id_vendedor, v.nome, v.email, v.fone, v.status, v.id_user, ue.is_admin
+       FROM vendedores v
+       LEFT JOIN usuario_empresa ue ON ue.id_usuario = v.id_user AND ue.id_empresa = $2
+       WHERE v.id_vendedor = $1 AND v.id_empresa = $2`,
+      [id, idEmpresa]
     );
     if (vendedor.rows.length === 0){
       return res.status(404).json({
@@ -449,7 +480,16 @@ export const excluirVendedor = async (req, res) => {
     if (idUser){
       await query(`DELETE FROM usuarios WHERE id_usuario = $1`, [idUser]);
     }
-    
+
+    registrarLog({
+      req,
+      acao: 'EXCLUIU',
+      modulo: 'Vendedores',
+      id_registro: id,
+      descricao: `Excluiu o vendedor "${vendedor.rows[0].nome}"`,
+      dados_anteriores: { id_vendedor: vendedor.rows[0].id_vendedor, nome: vendedor.rows[0].nome, email: vendedor.rows[0].email, status: vendedor.rows[0].status }
+    });
+
     return res.status(200).json({
       success: true,
       message: 'Vendedor excluído com sucesso'

@@ -23,6 +23,7 @@ import parametrosDefinicoesRoutes from './routes/parametros-definicoes-routes.js
 import parametrosValoresRoutes from './routes/parametros-valores-routes.js'; // ✅ NOVO
 import parametrosSuperAdminRoutes from './routes/parametros-superadmin-routes.js'; // ✅ SUPER ADMIN
 import dashboardRoutes from './routes/dashboard-routes.js';
+import logsRoutes from './routes/logs-routes.js';
 
 // Configurar variáveis de ambiente
 dotenv.config();
@@ -107,6 +108,9 @@ app.use('/pdv', pedidosRoutes);
 
 // Rotas de Dashboard
 app.use('/dashboard', dashboardRoutes);
+
+// Rotas de Log de Auditoria
+app.use('/logs', logsRoutes);
 
 // Rotas de Parâmetros ✅ ATUALIZADO
 app.use('/parametros/superadmin', parametrosSuperAdminRoutes); // Super Admin (configurar empresas)

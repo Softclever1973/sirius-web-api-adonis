@@ -4,6 +4,7 @@
 // =====================================================
 
 import { query } from '../config/database.js';
+import { registrarLog } from '../services/audit-service.js';
 
 // =====================================================
 // LISTAR CLIENTES (com paginação e filtros)
@@ -341,7 +342,16 @@ export const criarCliente = async (req, res) => {
       message: 'Cliente criado com sucesso',
       data: result.rows[0]
     });
-    
+
+    registrarLog({
+      req,
+      acao: 'CRIOU',
+      modulo: 'Clientes',
+      id_registro: result.rows[0].id,
+      descricao: `Criou o cliente "${result.rows[0].razao_social}"`,
+      dados_novos: result.rows[0]
+    });
+
   } catch (error) {
     console.error('Erro ao criar cliente:', error);
     res.status(500).json({
@@ -361,20 +371,23 @@ export const atualizarCliente = async (req, res) => {
     const clienteId = req.params.id;
     const dados = req.body;
     
-    // Verificar se cliente existe
+    // Verificar se cliente existe e guardar dados anteriores para o log
     const clienteExiste = await query(
-      'SELECT id_cliente, tipo, razao_social FROM clientes WHERE id_cliente = $1 AND id_empresa = $2',
+      `SELECT id_cliente as id, tipo, razao_social, nome_fantasia, cpf, cnpj,
+       CASE WHEN status = 'A' THEN 'S' ELSE 'N' END as ativo
+       FROM clientes WHERE id_cliente = $1 AND id_empresa = $2`,
       [clienteId, empresaId]
     );
-    
+
     if (clienteExiste.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Cliente não encontrado'
       });
     }
-    
+
     const clienteAtual = clienteExiste.rows[0];
+    const dadosAnterioresCliente = clienteExiste.rows[0];
     
     // ✅ VALIDAÇÃO ESPECIAL PARA CONSUMIDOR FINAL (se razao_social foi enviada)
     const razaoSocialNova = dados.razao_social || clienteAtual.razao_social;
@@ -514,7 +527,17 @@ export const atualizarCliente = async (req, res) => {
       message: 'Cliente atualizado com sucesso',
       data: result.rows[0]
     });
-    
+
+    registrarLog({
+      req,
+      acao: 'ALTEROU',
+      modulo: 'Clientes',
+      id_registro: result.rows[0].id,
+      descricao: `Alterou o cliente "${result.rows[0].razao_social}"`,
+      dados_anteriores: dadosAnterioresCliente,
+      dados_novos: result.rows[0]
+    });
+
   } catch (error) {
     console.error('Erro ao atualizar cliente:', error);
     res.status(500).json({
@@ -532,19 +555,23 @@ export const deletarCliente = async (req, res) => {
     const empresaId = req.empresa.id;
     const clienteId = req.params.id;
     
-    // Verificar se cliente existe
+    // Verificar se cliente existe e guardar dados anteriores para o log
     const clienteExiste = await query(
-      'SELECT id_cliente FROM clientes WHERE id_cliente = $1 AND id_empresa = $2',
+      `SELECT id_cliente as id, razao_social, cpf, cnpj,
+       CASE WHEN status = 'A' THEN 'S' ELSE 'N' END as ativo
+       FROM clientes WHERE id_cliente = $1 AND id_empresa = $2`,
       [clienteId, empresaId]
     );
-    
+
     if (clienteExiste.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Cliente não encontrado'
       });
     }
-    
+
+    const dadosAnterioresCliente = clienteExiste.rows[0];
+
     // Soft delete (marcar como inativo - status = 'I')
     await query(
       'UPDATE clientes SET status = $1, updated_at = NOW() WHERE id_cliente = $2 AND id_empresa = $3',
@@ -555,7 +582,16 @@ export const deletarCliente = async (req, res) => {
       success: true,
       message: 'Cliente inativado com sucesso'
     });
-    
+
+    registrarLog({
+      req,
+      acao: 'EXCLUIU',
+      modulo: 'Clientes',
+      id_registro: clienteId,
+      descricao: `Inativou o cliente "${dadosAnterioresCliente.razao_social}"`,
+      dados_anteriores: dadosAnterioresCliente
+    });
+
   } catch (error) {
     console.error('Erro ao deletar cliente:', error);
     res.status(500).json({
@@ -636,13 +672,21 @@ export const alterarStatusCliente = async (req, res) => {
     }
     
     const acao = statusFinal === 'A' ? 'ativado' : 'inativado';
-    
+
+    registrarLog({
+      req,
+      acao: 'ALTEROU',
+      modulo: 'Clientes',
+      id_registro: id,
+      descricao: `${acao.charAt(0).toUpperCase() + acao.slice(1)} o cliente "${result.rows[0].razao_social}"`
+    });
+
     return res.status(200).json({
       success: true,
       message: `Cliente ${acao} com sucesso!`,
       data: result.rows[0]
     });
-    
+
   } catch (error) {
     console.error('Erro ao alterar status do cliente:', error);
     return res.status(500).json({
