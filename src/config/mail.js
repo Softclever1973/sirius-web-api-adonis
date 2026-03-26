@@ -1,25 +1,22 @@
-import nodemailer from 'nodemailer';
-import dotenv from 'dotenv';
+// =====================================================
+// CONFIGURAÇÃO NODEMAILER (SMTP)
+// Desativado — Vercel bloqueia conexões SMTP de saída
+// Manter para uso local ou migração futura
+// =====================================================
 
-dotenv.config();
+// import nodemailer from 'nodemailer';
+// import dotenv from 'dotenv';
 
-const transport = nodemailer.createTransport({
-    host: process.env.AUTH_HOST,
-    port: process.env.AUTH_PORT,
-    secure: false,
-    auth:{
-        user: process.env.AUTH_EMAIL,
-        pass: process.env.AUTH_PASSWORD,
-    }
-});
+// dotenv.config();
 
-/*transport.sendMail({
-    from: `Victor SoftClever <${process.env.AUTH_EMAIL}>`,
-    to: 'henriquetezzei@softclever.com.br',
-    subject: 'Enviando email com nodemailer',
-    html: '<h1>Olá, Henrique</h1>',
-    text: 'Olá Henrique',
-}).then(() => console.log('Email enviado com sucesso'))
-.catch((err) => console.log('Erro ao enviar o email: ', err));*/
+// const transport = nodemailer.createTransport({
+//     host: process.env.AUTH_HOST,
+//     port: process.env.AUTH_PORT,
+//     secure: false,
+//     auth:{
+//         user: process.env.AUTH_EMAIL,
+//         pass: process.env.AUTH_PASSWORD,
+//     }
+// });
 
-export default transport;
+// export default transport;
