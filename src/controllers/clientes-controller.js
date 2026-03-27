@@ -3,7 +3,7 @@
 // VERSÃO CORRIGIDA - Consumidor Final + Status
 // =====================================================
 
-import { query } from '../config/database.js';
+import { query,querySchema } from '../config/database.js';
 import { registrarLog } from '../services/audit-service.js';
 
 // =====================================================

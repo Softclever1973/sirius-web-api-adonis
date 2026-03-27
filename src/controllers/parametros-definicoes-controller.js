@@ -3,7 +3,7 @@
 // Gerencia os parâmetros GLOBAIS do sistema
 // =====================================================
 
-import { query } from '../config/database.js';
+import { query,querySchema } from '../config/database.js';
 
 // =====================================================
 // LISTAR DEFINIÇÕES DE PARÂMETROS

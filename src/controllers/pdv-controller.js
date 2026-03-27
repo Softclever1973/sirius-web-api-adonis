@@ -3,7 +3,7 @@
 // âœ… CORRIGIDO: ValidaÃ§Ã£o de estoque com parÃ¢metro
 // =====================================================
 
-import { query, getClient } from '../config/database.js';
+import { query, getClient, querySchema, getClientForSchema } from '../config/database.js';
 
 // =====================================================
 // BUSCAR CLIENTES PARA PDV
@@ -328,17 +328,22 @@ export const obterProximoNumero = async (req, res) => {
 // âœ… VALIDAR ESTOQUE ANTES DE FINALIZAR (COM PARÃ‚METRO)
 // =====================================================
 const validarEstoque = async (schemaName, empresaId, itens) => {
-  const parametroQuery = `
-    SELECT COALESCE(pv.valor, pd.valor_padrao) as valor
-    FROM parametros_definicoes pd
-    LEFT JOIN parametros_valores pv
-      ON pv.id_parametro = pd.id_parametro
-      AND pv.id_empresa = $1
-    WHERE pd.codigo = ‘PERMITE_SALDO_NEGATIVO’
-  `;
+  let permiteSaldoNegativo = "N";
 
-  const parametroResult = await querySchema(schemaName, parametroQuery, [empresaId]);
-  const permiteSaldoNegativo = parametroResult.rows[0]?.valor || `N`;
+  try {
+    const parametroQuery = `
+      SELECT COALESCE(pv.valor, pd.valor_padrao) as valor
+      FROM public.parametros_definicoes pd
+      LEFT JOIN parametros_valores pv
+        ON pv.id_parametro = pd.id_parametro
+        AND pv.id_empresa = $1
+      WHERE pd.codigo = 'PERMITE_SALDO_NEGATIVO'
+    `;
+    const parametroResult = await querySchema(schemaName, parametroQuery, [empresaId]);
+    permiteSaldoNegativo = parametroResult.rows[0]?.valor || "N";
+  } catch (err) {
+    console.warn("Nao foi possivel consultar PERMITE_SALDO_NEGATIVO, assumindo N:", err.message);
+  }
 
   if (permiteSaldoNegativo === `S`) {
     return;

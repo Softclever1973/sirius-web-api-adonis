@@ -2,7 +2,7 @@
 // Controller de Formas de Pagamento
 // =====================================================
 
-import { query } from '../config/database.js';
+import { query,querySchema } from '../config/database.js';
 
 /**
  * GET /formas-pagamento

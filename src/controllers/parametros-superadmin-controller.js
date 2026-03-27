@@ -92,7 +92,7 @@ export const listarParametrosEmpresa = async (req, res) => {
         pv.updated_at as valor_updated_at,
         pv.updated_by,
         CASE WHEN pv.id IS NOT NULL THEN true ELSE false END as tem_valor_customizado
-      FROM parametros_definicoes pd
+      FROM public.parametros_definicoes pd
       LEFT JOIN parametros_valores pv
         ON pv.id_parametro = pd.id_parametro
         AND pv.id_empresa = $1
@@ -161,7 +161,7 @@ export const salvarValorEmpresa = async (req, res) => {
     // parametros_definicoes é em public — query normal
     const paramSql = `
       SELECT id_parametro, codigo, tipo, opcoes
-      FROM parametros_definicoes
+      FROM public.parametros_definicoes
       WHERE id_parametro = $1 AND ativo = true
     `;
     const paramResult = await query(paramSql, [id_parametro]);

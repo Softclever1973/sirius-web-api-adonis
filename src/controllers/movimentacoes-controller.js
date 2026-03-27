@@ -2,7 +2,7 @@
 // SIRIUS WEB API - Controller de Movimentacoes de Estoque
 // =====================================================
 
-import { query, getClient } from '../config/database.js';
+import { querySchema, getClientForSchema } from '../config/database.js';
 
 // =====================================================
 // LISTAR MOVIMENTACOES (com paginacao)

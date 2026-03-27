@@ -2,7 +2,7 @@
 // Controller de Vendedores
 // =====================================================
 
-import { query } from '../config/database.js';
+import { query,querySchema } from '../config/database.js';
 import bcrypt from 'bcryptjs';
 import { registrarLog } from '../services/audit-service.js';
 
@@ -218,7 +218,8 @@ export const criarVendedor = async (req, res) => {
     console.log('✅ Validações OK. Criando usuário e vendedor com id_empresa:', idEmpresa);
 
     // Criar usuário primeiro para obter o id_usuario
-    const userResult = await querySchema(req.empresa.schema, 
+    // usuarios e usuario_empresa ficam no public schema
+    const userResult = await query(
       `INSERT INTO usuarios (nome, sobrenome, email, senha_hash, celular, status, is_super_admin)
        VALUES ($1, $2, $3, $4, $5, 'A', false)
        RETURNING id_usuario, nome, email, celular`,
@@ -226,14 +227,15 @@ export const criarVendedor = async (req, res) => {
     );
     const usuario = userResult.rows[0];
 
-    await querySchema(req.empresa.schema, 
+    await query(
       `INSERT INTO usuario_empresa (id_usuario, id_empresa, is_admin, ativo)
        VALUES ($1, $2, $3, true)`,
       [usuario.id_usuario, idEmpresa, isAdmin]
     );
 
     // Inserir vendedor com o id_usuario já vinculado
-    const result = await querySchema(req.empresa.schema, 
+    // senha_hash fica em public.usuarios, não em vendedores
+    const result = await querySchema(req.empresa.schema,
       `INSERT INTO vendedores (
         id_empresa,
         id_user,
@@ -249,9 +251,8 @@ export const criarVendedor = async (req, res) => {
         comissao,
         meta_vendas,
         observacoes,
-        status,
-        senha_hash
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *`,
       [
         idEmpresa,
@@ -268,8 +269,7 @@ export const criarVendedor = async (req, res) => {
         comissao,
         meta_vendas,
         observacoes,
-        status || 'A',
-        senhaHash
+        status || 'A'
       ]
     );
 

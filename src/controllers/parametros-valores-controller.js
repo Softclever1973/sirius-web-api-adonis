@@ -3,7 +3,7 @@
 // Gerencia os valores configurados POR EMPRESA
 // =====================================================
 
-import { query } from '../config/database.js';
+import { query,querySchema } from '../config/database.js';
 
 // =====================================================
 // LISTAR PARÂMETROS COM VALORES DA EMPRESA
@@ -39,8 +39,8 @@ export const listarParametrosComValores = async (req, res) => {
         COALESCE(pv.valor, pd.valor_padrao) as valor_atual,
         pv.updated_at as valor_updated_at,
         CASE WHEN pv.id IS NOT NULL THEN true ELSE false END as tem_valor_customizado
-      FROM parametros_definicoes pd
-      LEFT JOIN parametros_valores pv 
+      FROM public.parametros_definicoes pd
+      LEFT JOIN parametros_valores pv
         ON pv.id_parametro = pd.id_parametro 
         AND pv.id_empresa = $1
       ${whereClause}
@@ -94,8 +94,8 @@ export const buscarValorPorCodigo = async (req, res) => {
         pd.valor_padrao,
         COALESCE(pv.valor, pd.valor_padrao) as valor,
         CASE WHEN pv.id IS NOT NULL THEN true ELSE false END as customizado
-      FROM parametros_definicoes pd
-      LEFT JOIN parametros_valores pv 
+      FROM public.parametros_definicoes pd
+      LEFT JOIN parametros_valores pv
         ON pv.id_parametro = pd.id_parametro 
         AND pv.id_empresa = $1
       WHERE pd.codigo = $2 AND pd.ativo = true
