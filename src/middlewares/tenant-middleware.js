@@ -30,7 +30,7 @@ export const setTenant = async (req, res, next) => {
     
     // Validar se o usuário tem acesso a essa empresa
     const result = await query(
-      `SELECT ue.id_empresa, ue.is_admin, e.razao_social, e.nome_fantasia
+      `SELECT ue.id_empresa, ue.is_admin, e.razao_social, e.nome_fantasia, e.schema_name
        FROM usuario_empresa ue
        JOIN empresas e ON e.id_empresa = ue.id_empresa
        WHERE ue.id_usuario = $1 AND ue.id_empresa = $2 AND ue.ativo = true`,
@@ -47,6 +47,7 @@ export const setTenant = async (req, res, next) => {
     // Adicionar dados da empresa no request
     req.empresa = {
       id: result.rows[0].id_empresa,
+      schema: result.rows[0].schema_name,
       razao_social: result.rows[0].razao_social,
       nome_fantasia: result.rows[0].nome_fantasia,
       is_admin: result.rows[0].is_admin
@@ -76,16 +77,17 @@ export const optionalTenant = async (req, res, next) => {
   if (empresaId && req.user) {
     try {
       const result = await query(
-        `SELECT ue.id_empresa, ue.is_admin, e.razao_social, e.nome_fantasia
+        `SELECT ue.id_empresa, ue.is_admin, e.razao_social, e.nome_fantasia, e.schema_name
          FROM usuario_empresa ue
          JOIN empresas e ON e.id_empresa = ue.id_empresa
          WHERE ue.id_usuario = $1 AND ue.id_empresa = $2 AND ue.ativo = true`,
         [req.user.id, empresaId]
       );
-      
+
       if (result.rows.length > 0) {
         req.empresa = {
           id: result.rows[0].id_empresa,
+          schema: result.rows[0].schema_name,
           razao_social: result.rows[0].razao_social,
           nome_fantasia: result.rows[0].nome_fantasia,
           is_admin: result.rows[0].is_admin

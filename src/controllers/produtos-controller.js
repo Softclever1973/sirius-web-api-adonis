@@ -4,7 +4,7 @@
 // VERSÃO CORRIGIDA - ORDENAÇÃO FUNCIONANDO
 // =====================================================
 
-import { query } from '../config/database.js';
+import { querySchema } from '../config/database.js';
 import { registrarLog } from '../services/audit-service.js';
 
 // =====================================================
@@ -83,7 +83,7 @@ export const listarProdutos = async (req, res) => {
       WHERE ${whereClause}
     `;
     
-    const countResult = await query(countQuery, queryParams);
+    const countResult = await querySchema(req.empresa.schema, countQuery, queryParams);
     const total = parseInt(countResult.rows[0].total);
     
     // Query de dados
@@ -123,7 +123,7 @@ export const listarProdutos = async (req, res) => {
     
     queryParams.push(limit, offset);
     
-    const dataResult = await query(dataQuery, queryParams);
+    const dataResult = await querySchema(req.empresa.schema, dataQuery, queryParams);
     
     // Calcular metadados de paginação
     const totalPages = Math.ceil(total / limit);
@@ -158,7 +158,7 @@ export const buscarProduto = async (req, res) => {
     const empresaId = req.empresa.id;
     const produtoId = req.params.id;
     
-    const result = await query(
+    const result = await querySchema(req.empresa.schema, 
       `SELECT 
         id_produto as id,
         codigo,
@@ -253,7 +253,7 @@ export const criarProduto = async (req, res) => {
     }
     
     // Verificar se código já existe
-    const codigoExiste = await query(
+    const codigoExiste = await querySchema(req.empresa.schema, 
       'SELECT id_produto FROM produtos WHERE codigo = $1 AND id_empresa = $2',
       [codigo, empresaId]
     );
@@ -269,7 +269,7 @@ export const criarProduto = async (req, res) => {
     const status = (ativo === 'N') ? 'I' : 'A';
     
     // Inserir produto
-    const result = await query(
+    const result = await querySchema(req.empresa.schema, 
       `INSERT INTO produtos (
         id_empresa,
         codigo,
@@ -385,7 +385,7 @@ export const atualizarProduto = async (req, res) => {
     const dados = req.body;
     
     // Verificar se produto existe e guardar dados anteriores para o log
-    const produtoExiste = await query(
+    const produtoExiste = await querySchema(req.empresa.schema, 
       `SELECT id_produto as id, codigo, ean as codigo_barras, descricao, descricao_complemento,
        unidade_comercial as unidade, custo as preco_custo, valor_venda as preco_venda,
        saldo as estoque_atual, estoque_minimo, estoque_maximo,
@@ -405,7 +405,7 @@ export const atualizarProduto = async (req, res) => {
 
     // Se mudou o código, verificar duplicidade
     if (dados.codigo) {
-      const codigoExiste = await query(
+      const codigoExiste = await querySchema(req.empresa.schema, 
         'SELECT id_produto FROM produtos WHERE codigo = $1 AND id_empresa = $2 AND id_produto != $3',
         [dados.codigo, empresaId, produtoId]
       );
@@ -510,7 +510,7 @@ export const atualizarProduto = async (req, res) => {
         updated_at as atualizado_em
     `;
     
-    const result = await query(updateQuery, valoresUpdate);
+    const result = await querySchema(req.empresa.schema, updateQuery, valoresUpdate);
     
     res.json({
       success: true,
@@ -546,7 +546,7 @@ export const deletarProduto = async (req, res) => {
     const produtoId = req.params.id;
     
     // Verificar se produto existe e guardar dados anteriores para o log
-    const produtoExiste = await query(
+    const produtoExiste = await querySchema(req.empresa.schema, 
       `SELECT id_produto as id, codigo, descricao,
        CASE WHEN status = 'A' THEN 'S' ELSE 'N' END as ativo
        FROM produtos WHERE id_produto = $1 AND id_empresa = $2`,
@@ -563,7 +563,7 @@ export const deletarProduto = async (req, res) => {
     const dadosAnterioresProduto = produtoExiste.rows[0];
 
     // Soft delete (marcar como inativo - status = 'I')
-    await query(
+    await querySchema(req.empresa.schema, 
       'UPDATE produtos SET status = $1 WHERE id_produto = $2 AND id_empresa = $3',
       ['I', produtoId, empresaId]
     );
@@ -601,7 +601,7 @@ export const toggleStatusProduto = async (req, res) => {
     const produtoId = req.params.id;
 
     // Buscar dados atuais para o log
-    const resultado = await query(
+    const resultado = await querySchema(req.empresa.schema, 
       `SELECT id_produto as id, codigo, descricao, status FROM produtos WHERE id_produto = $1 AND id_empresa = $2`,
       [produtoId, empresaId]
     );
@@ -617,7 +617,7 @@ export const toggleStatusProduto = async (req, res) => {
     const novoStatus  = statusAtual === 'A' ? 'I' : 'A';
     const mensagem    = novoStatus === 'A' ? 'Produto ativado com sucesso' : 'Produto inativado com sucesso';
 
-    await query(
+    await querySchema(req.empresa.schema, 
       'UPDATE produtos SET status = $1 WHERE id_produto = $2 AND id_empresa = $3',
       [novoStatus, produtoId, empresaId]
     );

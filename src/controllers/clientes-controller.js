@@ -60,7 +60,7 @@ export const listarClientes = async (req, res) => {
       WHERE ${whereClause}
     `;
     
-    const countResult = await query(countQuery, queryParams);
+    const countResult = await querySchema(req.empresa.schema, countQuery, queryParams);
     const total = parseInt(countResult.rows[0].total);
     
     // Query de dados
@@ -92,7 +92,7 @@ export const listarClientes = async (req, res) => {
     
     queryParams.push(limit, offset);
     
-    const dataResult = await query(dataQuery, queryParams);
+    const dataResult = await querySchema(req.empresa.schema, dataQuery, queryParams);
     
     // Calcular metadados de paginação
     const totalPages = Math.ceil(total / limit);
@@ -127,7 +127,7 @@ export const buscarCliente = async (req, res) => {
     const empresaId = req.empresa.id;
     const clienteId = req.params.id;
     
-    const result = await query(
+    const result = await querySchema(req.empresa.schema, 
       `SELECT 
         id_cliente as id,
         tipo,
@@ -182,7 +182,7 @@ export const criarCliente = async (req, res) => {
 
     let id_vendedor = null;
     if (req.user?.email) {
-      const vendedorResult = await query(
+      const vendedorResult = await querySchema(req.empresa.schema, 
         'SELECT id_vendedor FROM vendedores WHERE email = $1 AND id_empresa = $2',[req.user.email, empresaId]
       );
       if (vendedorResult.rows.length > 0){
@@ -248,7 +248,7 @@ export const criarCliente = async (req, res) => {
     
     // Verificar se CPF/CNPJ já existe
     if (tipo === 'F' && cpf) {
-      const cpfExiste = await query(
+      const cpfExiste = await querySchema(req.empresa.schema, 
         'SELECT id_cliente FROM clientes WHERE cpf = $1 AND id_empresa = $2',
         [cpf, empresaId]
       );
@@ -262,7 +262,7 @@ export const criarCliente = async (req, res) => {
     }
     
     if (tipo === 'J' && cnpj) {
-      const cnpjExiste = await query(
+      const cnpjExiste = await querySchema(req.empresa.schema, 
         'SELECT id_cliente FROM clientes WHERE cnpj = $1 AND id_empresa = $2',
         [cnpj, empresaId]
       );
@@ -279,7 +279,7 @@ export const criarCliente = async (req, res) => {
     const status = (ativo === 'N') ? 'I' : 'A';
     
     // Inserir cliente
-    const result = await query(
+    const result = await querySchema(req.empresa.schema, 
       `INSERT INTO clientes (
         id_empresa,
         tipo,
@@ -372,7 +372,7 @@ export const atualizarCliente = async (req, res) => {
     const dados = req.body;
     
     // Verificar se cliente existe e guardar dados anteriores para o log
-    const clienteExiste = await query(
+    const clienteExiste = await querySchema(req.empresa.schema, 
       `SELECT id_cliente as id, tipo, razao_social, nome_fantasia, cpf, cnpj,
        CASE WHEN status = 'A' THEN 'S' ELSE 'N' END as ativo
        FROM clientes WHERE id_cliente = $1 AND id_empresa = $2`,
@@ -415,7 +415,7 @@ export const atualizarCliente = async (req, res) => {
     
     // Se mudou o CPF, verificar duplicidade
     if (dados.cpf) {
-      const cpfExiste = await query(
+      const cpfExiste = await querySchema(req.empresa.schema, 
         'SELECT id_cliente FROM clientes WHERE cpf = $1 AND id_empresa = $2 AND id_cliente != $3',
         [dados.cpf, empresaId, clienteId]
       );
@@ -430,7 +430,7 @@ export const atualizarCliente = async (req, res) => {
     
     // Se mudou o CNPJ, verificar duplicidade
     if (dados.cnpj) {
-      const cnpjExiste = await query(
+      const cnpjExiste = await querySchema(req.empresa.schema, 
         'SELECT id_cliente FROM clientes WHERE cnpj = $1 AND id_empresa = $2 AND id_cliente != $3',
         [dados.cnpj, empresaId, clienteId]
       );
@@ -520,7 +520,7 @@ export const atualizarCliente = async (req, res) => {
         updated_at as atualizado_em
     `;
     
-    const result = await query(updateQuery, valoresUpdate);
+    const result = await querySchema(req.empresa.schema, updateQuery, valoresUpdate);
     
     res.json({
       success: true,
@@ -556,7 +556,7 @@ export const deletarCliente = async (req, res) => {
     const clienteId = req.params.id;
     
     // Verificar se cliente existe e guardar dados anteriores para o log
-    const clienteExiste = await query(
+    const clienteExiste = await querySchema(req.empresa.schema, 
       `SELECT id_cliente as id, razao_social, cpf, cnpj,
        CASE WHEN status = 'A' THEN 'S' ELSE 'N' END as ativo
        FROM clientes WHERE id_cliente = $1 AND id_empresa = $2`,
@@ -573,7 +573,7 @@ export const deletarCliente = async (req, res) => {
     const dadosAnterioresCliente = clienteExiste.rows[0];
 
     // Soft delete (marcar como inativo - status = 'I')
-    await query(
+    await querySchema(req.empresa.schema, 
       'UPDATE clientes SET status = $1, updated_at = NOW() WHERE id_cliente = $2 AND id_empresa = $3',
       ['I', clienteId, empresaId]
     );
@@ -630,7 +630,7 @@ export const alterarStatusCliente = async (req, res) => {
     const statusFinal = (ativo === 'S' || ativo === 'A') ? 'A' : 'I';
     
     // Verificar se cliente existe
-    const checkResult = await query(
+    const checkResult = await querySchema(req.empresa.schema, 
       `SELECT id_cliente, razao_social, status 
        FROM clientes 
        WHERE id_cliente = $1 AND id_empresa = $2`,
@@ -656,7 +656,7 @@ export const alterarStatusCliente = async (req, res) => {
     }
     
     // Atualizar status
-    const result = await query(
+    const result = await querySchema(req.empresa.schema, 
       `UPDATE clientes 
        SET status = $1, updated_at = CURRENT_TIMESTAMP
        WHERE id_cliente = $2 AND id_empresa = $3

@@ -6,7 +6,8 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { query, getClient } from '../config/database.js';
+import { query, querySchema, getClient } from '../config/database.js';
+import { createEmpresaSchema } from '../config/schema-ddl.js';
 import { sendPasswordResetEmail } from '../services/emailService.js';
 
 function handleAuthError(res, error) {
@@ -123,15 +124,27 @@ export const register = async (req, res) => {
       [usuario.id_usuario, empresa.id_empresa]
     );
 
+    // Criar schema isolado para a empresa
+    const schemaName = `emp_${empresa.id_empresa}`;
+    await createEmpresaSchema(client, schemaName);
+
+    // Salvar schema_name na empresa
+    await client.query(
+      'UPDATE empresas SET schema_name = $1 WHERE id_empresa = $2',
+      [schemaName, empresa.id_empresa]
+    );
+
+    // Inserir formas de pagamento padrão no schema da empresa
+    await client.query(`SET LOCAL search_path TO "${schemaName}", public`);
     await client.query(`
-      INSERT INTO formas_pagamento (id_empresa, codigo, descricao, permite_troco, ativo) 
+      INSERT INTO formas_pagamento (id_empresa, codigo, descricao, permite_troco, ativo)
       VALUES ($1,'04','Cartão de Débito',false,true),
         ($1,'01','Dinheiro',true,true),
         ($1,'03','Cartão de Credito',false,true),
-        ($1,'17','PIX',false,true);`,
+        ($1,'17','PIX',false,true)`,
       [empresa.id_empresa]
     );
-    
+
     await client.query('COMMIT');
     
     res.status(201).json({
@@ -213,12 +226,13 @@ export const login = async (req, res) => {
     
     // Buscar empresas do usuário
     const empresasResult = await query(
-      `SELECT 
+      `SELECT
         e.id_empresa,
         e.razao_social,
         e.nome_fantasia,
         e.cnpj,
         e.plano,
+        e.schema_name,
         ue.is_admin
        FROM usuario_empresa ue
        JOIN empresas e ON e.id_empresa = ue.id_empresa
@@ -226,32 +240,37 @@ export const login = async (req, res) => {
        ORDER BY e.razao_social`,
       [usuario.id_usuario]
     );
-    
+
     const empresas = empresasResult.rows;
-    
+
     if (empresas.length === 0) {
       return res.status(403).json({
         success: false,
         message: 'Usuário não está vinculado a nenhuma empresa ativa'
       });
     }
-    
-    // ✅ NOVO: Buscar TODOS os parâmetros da primeira empresa
-    const empresaId = empresas[0].id_empresa;
-    
+
+    // Buscar TODOS os parâmetros da primeira empresa usando seu schema
+    const primeiraEmpresa = empresas[0];
+    const empresaId = primeiraEmpresa.id_empresa;
+    const schemaEmpresa = primeiraEmpresa.schema_name;
+
     const parametrosQuery = `
-      SELECT 
+      SELECT
         pd.codigo,
         COALESCE(pv.valor, pd.valor_padrao) as valor
       FROM parametros_definicoes pd
-      LEFT JOIN parametros_valores pv 
-        ON pv.id_parametro = pd.id_parametro 
+      LEFT JOIN parametros_valores pv
+        ON pv.id_parametro = pd.id_parametro
         AND pv.id_empresa = $1
       WHERE pd.ativo = true
       ORDER BY pd.codigo
     `;
-    
-    const parametrosResult = await query(parametrosQuery, [empresaId]);
+
+    // parametros_valores fica no schema da empresa; parametros_definicoes em public
+    const parametrosResult = schemaEmpresa
+      ? await querySchema(schemaEmpresa, parametrosQuery, [empresaId])
+      : await query(parametrosQuery, [empresaId]);
     
     // Transformar array em objeto { codigo: valor }
     const parametros = {};
@@ -298,7 +317,8 @@ export const login = async (req, res) => {
           nome_fantasia: emp.nome_fantasia,
           cnpj: emp.cnpj,
           plano: emp.plano,
-          is_admin: emp.is_admin
+          is_admin: emp.is_admin,
+          schema: emp.schema_name
         })),
         parametros: parametros  // ✅ NOVO! Todos os parâmetros da empresa
       }

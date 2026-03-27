@@ -47,7 +47,7 @@ export const listarParametrosComValores = async (req, res) => {
       ORDER BY pd.modulo, pd.ordem, pd.descricao
     `;
     
-    const result = await query(sql, queryParams);
+    const result = await querySchema(req.empresa.schema, sql, queryParams);
     
     // Agrupar por módulo
     const porModulo = result.rows.reduce((acc, param) => {
@@ -101,7 +101,7 @@ export const buscarValorPorCodigo = async (req, res) => {
       WHERE pd.codigo = $2 AND pd.ativo = true
     `;
     
-    const result = await query(sql, [empresaId, codigo]);
+    const result = await querySchema(req.empresa.schema, sql, [empresaId, codigo]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -147,7 +147,7 @@ export const salvarValor = async (req, res) => {
       FROM parametros_definicoes 
       WHERE id_parametro = $1 AND ativo = true
     `;
-    const paramResult = await query(paramSql, [id_parametro]);
+    const paramResult = await querySchema(req.empresa.schema, paramSql, [id_parametro]);
     
     if (paramResult.rows.length === 0) {
       return res.status(404).json({
@@ -172,7 +172,7 @@ export const salvarValor = async (req, res) => {
       SELECT id FROM parametros_valores 
       WHERE id_empresa = $1 AND id_parametro = $2
     `;
-    const checkResult = await query(checkSql, [empresaId, id_parametro]);
+    const checkResult = await querySchema(req.empresa.schema, checkSql, [empresaId, id_parametro]);
     
     let result;
     
@@ -184,7 +184,7 @@ export const salvarValor = async (req, res) => {
         WHERE id_empresa = $3 AND id_parametro = $4
         RETURNING *
       `;
-      result = await query(updateSql, [valorValidado.valor, userId, empresaId, id_parametro]);
+      result = await querySchema(req.empresa.schema, updateSql, [valorValidado.valor, userId, empresaId, id_parametro]);
     } else {
       // Inserir
       const insertSql = `
@@ -192,7 +192,7 @@ export const salvarValor = async (req, res) => {
         VALUES ($1, $2, $3, $4)
         RETURNING *
       `;
-      result = await query(insertSql, [empresaId, id_parametro, valorValidado.valor, userId]);
+      result = await querySchema(req.empresa.schema, insertSql, [empresaId, id_parametro, valorValidado.valor, userId]);
     }
     
     res.json({
@@ -239,7 +239,7 @@ export const salvarMultiplosValores = async (req, res) => {
           FROM parametros_definicoes 
           WHERE id_parametro = $1
         `;
-        const paramResult = await query(paramSql, [id_parametro]);
+        const paramResult = await querySchema(req.empresa.schema, paramSql, [id_parametro]);
         
         if (paramResult.rows.length === 0) continue;
         
@@ -260,7 +260,7 @@ export const salvarMultiplosValores = async (req, res) => {
           RETURNING *
         `;
         
-        await query(upsertSql, [empresaId, id_parametro, valorValidado.valor, userId]);
+        await querySchema(req.empresa.schema, upsertSql, [empresaId, id_parametro, valorValidado.valor, userId]);
         resultados.push({ id_parametro, success: true });
         
       } catch (err) {
@@ -297,7 +297,7 @@ export const resetarValor = async (req, res) => {
       RETURNING *
     `;
     
-    const result = await query(sql, [empresaId, id_parametro]);
+    const result = await querySchema(req.empresa.schema, sql, [empresaId, id_parametro]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({

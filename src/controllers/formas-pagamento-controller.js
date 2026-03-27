@@ -24,7 +24,7 @@ export const listarFormasPagamento = async (req, res) => {
       });
     }
     
-    const result = await query(
+    const result = await querySchema(req.empresa.schema, 
       `SELECT 
         id_forma_pagamento,
         id_empresa,
@@ -75,7 +75,7 @@ export const buscarFormaPagamento = async (req, res) => {
       });
     }
     
-    const result = await query(
+    const result = await querySchema(req.empresa.schema, 
       `SELECT 
         id_forma_pagamento,
         id_empresa,
@@ -158,7 +158,7 @@ export const criarFormaPagamento = async (req, res) => {
     }
     
     // Verificar se código já existe para esta empresa
-    const existente = await query(
+    const existente = await querySchema(req.empresa.schema, 
       `SELECT id_forma_pagamento FROM formas_pagamento 
        WHERE id_empresa = $1 AND codigo = $2`,
       [idEmpresa, codigo]
@@ -174,7 +174,7 @@ export const criarFormaPagamento = async (req, res) => {
     console.log('✅ Validações OK. Inserindo forma de pagamento com id_empresa:', idEmpresa);
     
     // Inserir forma de pagamento
-    const result = await query(
+    const result = await querySchema(req.empresa.schema, 
       `INSERT INTO formas_pagamento (
         id_empresa,
         codigo,
@@ -254,7 +254,7 @@ export const atualizarFormaPagamento = async (req, res) => {
     }
     
     // Verificar se código já existe para outra forma de pagamento desta empresa
-    const existente = await query(
+    const existente = await querySchema(req.empresa.schema, 
       `SELECT id_forma_pagamento FROM formas_pagamento 
        WHERE id_empresa = $1 AND codigo = $2 AND id_forma_pagamento != $3`,
       [idEmpresa, codigo, id]
@@ -268,7 +268,7 @@ export const atualizarFormaPagamento = async (req, res) => {
     }
     
     // Atualizar forma de pagamento
-    const result = await query(
+    const result = await querySchema(req.empresa.schema, 
       `UPDATE formas_pagamento SET
         codigo = $1,
         descricao = $2,
@@ -330,7 +330,7 @@ export const excluirFormaPagamento = async (req, res) => {
       });
     }
     
-    const result = await query(
+    const result = await querySchema(req.empresa.schema, 
       `DELETE FROM formas_pagamento 
        WHERE id_forma_pagamento = $1 AND id_empresa = $2
        RETURNING id_forma_pagamento`,

@@ -89,9 +89,75 @@ export const getClient = async () => {
   return client;
 };
 
-// Helper para setar empresa_id (RLS)
+// Helper para setar empresa_id (RLS) — mantido para compatibilidade
 export const setEmpresaId = async (client, empresaId) => {
   await client.query('SET LOCAL app.current_empresa_id = $1', [empresaId]);
+};
+
+// =====================================================
+// Helper para queries com schema por-empresa
+// Usa SET LOCAL search_path dentro de uma transaction
+// para que a query resolva as tabelas no schema correto.
+// Compatível com PgBouncer em transaction pooling mode.
+// =====================================================
+export const querySchema = async (schemaName, text, params) => {
+  const start = Date.now();
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+    await client.query(`SET LOCAL search_path TO "${schemaName}", public`);
+    const result = await client.query(text, params);
+    await client.query('COMMIT');
+
+    if (process.env.NODE_ENV === 'development') {
+      const duration = Date.now() - start;
+      console.log('📊 QuerySchema:', { schema: schemaName, text: text.substring(0, 50), duration: `${duration}ms`, rows: result.rowCount });
+    }
+
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('❌ Erro na querySchema:', error.message);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+// =====================================================
+// Helper para transações com schema por-empresa
+// Após client.query('BEGIN'), o search_path é setado
+// automaticamente para o schema da empresa.
+// =====================================================
+export const getClientForSchema = async (schemaName) => {
+  const client = await pool.connect();
+
+  const originalQuery = client.query.bind(client);
+  const originalRelease = client.release.bind(client);
+
+  const timeout = setTimeout(() => {
+    console.error('❌ Cliente do banco não foi liberado após 10 segundos!');
+    client.release = originalRelease;
+    originalRelease();
+  }, 10000);
+
+  client.release = () => {
+    clearTimeout(timeout);
+    client.release = originalRelease;
+    return originalRelease();
+  };
+
+  // Injeta SET LOCAL search_path logo após cada BEGIN
+  client.query = async (text, params) => {
+    const result = await originalQuery(text, params);
+    if (typeof text === 'string' && text.trim().toUpperCase() === 'BEGIN') {
+      await originalQuery(`SET LOCAL search_path TO "${schemaName}", public`);
+    }
+    return result;
+  };
+
+  return client;
 };
 
 // Cleanup ao encerrar (importante para serverless)
