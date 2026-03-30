@@ -6,7 +6,8 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { query, getClient } from '../config/database.js';
+import { query, querySchema, getClient } from '../config/database.js';
+import { createEmpresaSchema } from '../config/schema-ddl.js';
 import { sendPasswordResetEmail } from '../services/emailService.js';
 
 function handleAuthError(res, error) {
@@ -52,17 +53,17 @@ function handleAuthError(res, error) {
  */
 export const register = async (req, res) => {
   const client = await getClient();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     const {
       nome, sobrenome, email, senha, celular,
       razao_social, cnpj, telefone, email_empresa,
       cep, logradouro_tipo, logradouro, numero, complemento,
       bairro, municipio, uf
     } = req.body;
-    
+
     // Validações básicas
     if (!nome || !email || !senha || !razao_social || !cnpj) {
       return res.status(400).json({
@@ -70,71 +71,124 @@ export const register = async (req, res) => {
         message: 'Nome, email, senha, razão social e CNPJ são obrigatórios'
       });
     }
-    
+
     // Verificar se email já existe
     const emailExists = await client.query(
       'SELECT id_usuario FROM usuarios WHERE email = $1',
       [email.toLowerCase()]
     );
-    
+
     if (emailExists.rows.length > 0) {
       return res.status(400).json({
         success: false,
         message: 'Este email já está cadastrado'
       });
     }
-    
+
     // Hash da senha
     const senhaHash = await bcrypt.hash(senha, 10);
-    
+
+    // =====================================================
     // Inserir usuário
+    // =====================================================
     const userResult = await client.query(
       `INSERT INTO usuarios (nome, sobrenome, email, senha_hash, celular, status, is_super_admin)
        VALUES ($1, $2, $3, $4, $5, 'A', true)
        RETURNING id_usuario, nome, sobrenome, email, celular`,
       [nome, sobrenome || '', email.toLowerCase(), senhaHash, celular || null]
     );
-    
+
     const usuario = userResult.rows[0];
-    
-    // Criar empresa
+
+    // =====================================================
+    // Gerar id_empresa e schema_name antes do INSERT
+    // =====================================================
+    const nextEmpresaIdResult = await client.query(
+      `SELECT nextval(pg_get_serial_sequence('empresas', 'id_empresa')) AS id_empresa`
+    );
+
+    const nextEmpresaId = nextEmpresaIdResult.rows[0].id_empresa;
+    const schemaName = `emp_${nextEmpresaId}`;
+
+    // =====================================================
+    // Criar empresa já com schema_name
+    // =====================================================
     const empresaResult = await client.query(
       `INSERT INTO empresas (
-        razao_social, nome_fantasia, cnpj, telefone, email, plano, status,
-        cep, logradouro_tipo, logradouro, numero, complemento,
-        bairro, municipio, uf
-      ) VALUES ($1, $2, $3, $4, $5, 'FREE', 'A', $6, $7, $8, $9, $10, $11, $12, $13)
-      RETURNING id_empresa, razao_social, nome_fantasia, cnpj, plano`,
+        id_empresa,
+        razao_social,
+        nome_fantasia,
+        cnpj,
+        telefone,
+        email,
+        plano,
+        status,
+        schema_name,
+        cep,
+        logradouro_tipo,
+        logradouro,
+        numero,
+        complemento,
+        bairro,
+        municipio,
+        uf
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, 'FREE', 'A', $7, $8, $9, $10, $11, $12, $13, $14, $15
+      )
+      RETURNING id_empresa, razao_social, nome_fantasia, cnpj, plano, schema_name`,
       [
-        razao_social, razao_social, cnpj,
-        telefone || null, email_empresa || null,
-        cep || null, logradouro_tipo || null, logradouro || null,
-        numero || null, complemento || null,
-        bairro || null, municipio || null, uf || null
+        nextEmpresaId,
+        razao_social,
+        razao_social,
+        cnpj,
+        telefone || null,
+        email_empresa || null,
+        schemaName,
+        cep || null,
+        logradouro_tipo || null,
+        logradouro || null,
+        numero || null,
+        complemento || null,
+        bairro || null,
+        municipio || null,
+        uf || null
       ]
     );
-    
+
     const empresa = empresaResult.rows[0];
-    
+
+    // =====================================================
     // Vincular usuário à empresa como ADMIN
+    // =====================================================
     await client.query(
       `INSERT INTO usuario_empresa (id_usuario, id_empresa, is_admin, ativo)
        VALUES ($1, $2, true, true)`,
       [usuario.id_usuario, empresa.id_empresa]
     );
 
-    await client.query(`
-      INSERT INTO formas_pagamento (id_empresa, codigo, descricao, permite_troco, ativo) 
-      VALUES ($1,'04','Cartão de Débito',false,true),
+    // =====================================================
+    // Criar schema isolado da empresa
+    // =====================================================
+    await createEmpresaSchema(client, schemaName);
+
+    // =====================================================
+    // Inserir formas de pagamento padrão
+    // =====================================================
+    await client.query(`SET LOCAL search_path TO "${schemaName}", public`);
+
+    await client.query(
+      `INSERT INTO formas_pagamento (id_empresa, codigo, descricao, permite_troco, ativo)
+       VALUES
+        ($1,'04','Cartão de Débito',false,true),
         ($1,'01','Dinheiro',true,true),
-        ($1,'03','Cartão de Credito',false,true),
-        ($1,'17','PIX',false,true);`,
+        ($1,'03','Cartão de Crédito',false,true),
+        ($1,'17','PIX',false,true)`,
       [empresa.id_empresa]
     );
-    
+
     await client.query('COMMIT');
-    
-    res.status(201).json({
+
+    return res.status(201).json({
       success: true,
       message: 'Cadastro realizado com sucesso! Faça login para continuar.',
       data: {
@@ -146,11 +200,12 @@ export const register = async (req, res) => {
         empresa: {
           id: empresa.id_empresa,
           razao_social: empresa.razao_social,
-          nome_fantasia: empresa.nome_fantasia
+          nome_fantasia: empresa.nome_fantasia,
+          schema_name: empresa.schema_name
         }
       }
     });
-    
+
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Erro no registro:', error);
@@ -213,12 +268,13 @@ export const login = async (req, res) => {
     
     // Buscar empresas do usuário
     const empresasResult = await query(
-      `SELECT 
+      `SELECT
         e.id_empresa,
         e.razao_social,
         e.nome_fantasia,
         e.cnpj,
         e.plano,
+        e.schema_name,
         ue.is_admin
        FROM usuario_empresa ue
        JOIN empresas e ON e.id_empresa = ue.id_empresa
@@ -226,32 +282,37 @@ export const login = async (req, res) => {
        ORDER BY e.razao_social`,
       [usuario.id_usuario]
     );
-    
+
     const empresas = empresasResult.rows;
-    
+
     if (empresas.length === 0) {
       return res.status(403).json({
         success: false,
         message: 'Usuário não está vinculado a nenhuma empresa ativa'
       });
     }
-    
-    // ✅ NOVO: Buscar TODOS os parâmetros da primeira empresa
-    const empresaId = empresas[0].id_empresa;
-    
+
+    // Buscar TODOS os parâmetros da primeira empresa usando seu schema
+    const primeiraEmpresa = empresas[0];
+    const empresaId = primeiraEmpresa.id_empresa;
+    const schemaEmpresa = primeiraEmpresa.schema_name;
+
     const parametrosQuery = `
-      SELECT 
+      SELECT
         pd.codigo,
         COALESCE(pv.valor, pd.valor_padrao) as valor
-      FROM parametros_definicoes pd
-      LEFT JOIN parametros_valores pv 
-        ON pv.id_parametro = pd.id_parametro 
+      FROM public.parametros_definicoes pd
+      LEFT JOIN parametros_valores pv
+        ON pv.id_parametro = pd.id_parametro
         AND pv.id_empresa = $1
       WHERE pd.ativo = true
       ORDER BY pd.codigo
     `;
-    
-    const parametrosResult = await query(parametrosQuery, [empresaId]);
+
+    // parametros_valores fica no schema da empresa; parametros_definicoes em public
+    const parametrosResult = schemaEmpresa
+      ? await querySchema(schemaEmpresa, parametrosQuery, [empresaId])
+      : await query(parametrosQuery, [empresaId]);
     
     // Transformar array em objeto { codigo: valor }
     const parametros = {};
@@ -298,7 +359,8 @@ export const login = async (req, res) => {
           nome_fantasia: emp.nome_fantasia,
           cnpj: emp.cnpj,
           plano: emp.plano,
-          is_admin: emp.is_admin
+          is_admin: emp.is_admin,
+          schema: emp.schema_name
         })),
         parametros: parametros  // ✅ NOVO! Todos os parâmetros da empresa
       }

@@ -3,7 +3,7 @@
 // âœ… CORRIGIDO: ValidaÃ§Ã£o de estoque com parÃ¢metro
 // =====================================================
 
-import { query, getClient } from '../config/database.js';
+import { query, getClient, querySchema, getClientForSchema } from '../config/database.js';
 
 // =====================================================
 // BUSCAR CLIENTES PARA PDV
@@ -84,7 +84,7 @@ export const buscarClientes = async (req, res) => {
       params = [empresaId, `%${termo}%`];
     }
 
-    const result = await query(sql, params);
+    const result = await querySchema(req.empresa.schema, sql, params);
 
     res.json({
       success: true,
@@ -139,7 +139,7 @@ export const buscarProdutos = async (req, res) => {
       LIMIT 20
     `;
     
-    const result = await query(sql, [empresaId, `%${termo}%`]);
+    const result = await querySchema(req.empresa.schema, sql, [empresaId, `%${termo}%`]);
     
     res.json({
       success: true,
@@ -186,7 +186,7 @@ export const obterPrimeiroCliente = async (req, res) => {
       LIMIT 1
     `;
     
-    const result = await query(sql, [empresaId]);
+    const result = await querySchema(req.empresa.schema, sql, [empresaId]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -235,7 +235,7 @@ export const obterClientePorId = async (req, res) => {
       LIMIT 1
     `;
     
-    const result = await query(sql, [empresaId, id]);
+    const result = await querySchema(req.empresa.schema, sql, [empresaId, id]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -277,7 +277,7 @@ export const listarFormasPagamento = async (req, res) => {
       ORDER BY descricao
     `;
     
-    const result = await query(sql, [empresaId]);
+    const result = await querySchema(req.empresa.schema, sql, [empresaId]);
     
     res.json({
       success: true,
@@ -306,7 +306,7 @@ export const obterProximoNumero = async (req, res) => {
       WHERE id_empresa = $1
     `;
     
-    const result = await query(sql, [empresaId]);
+    const result = await querySchema(req.empresa.schema, sql, [empresaId]);
     
     res.json({
       success: true,
@@ -327,39 +327,36 @@ export const obterProximoNumero = async (req, res) => {
 // =====================================================
 // âœ… VALIDAR ESTOQUE ANTES DE FINALIZAR (COM PARÃ‚METRO)
 // =====================================================
-const validarEstoque = async (empresaId, itens) => {
-  // âœ… BUSCAR PARÃ‚METRO PERMITE_SALDO_NEGATIVO
-  const parametroQuery = `
-    SELECT COALESCE(pv.valor, pd.valor_padrao) as valor
-    FROM parametros_definicoes pd
-    LEFT JOIN parametros_valores pv 
-      ON pv.id_parametro = pd.id_parametro 
-      AND pv.id_empresa = $1
-    WHERE pd.codigo = 'PERMITE_SALDO_NEGATIVO'
-  `;
-  
-  const parametroResult = await query(parametroQuery, [empresaId]);
-  const permiteSaldoNegativo = parametroResult.rows[0]?.valor || 'N';
-  
-  console.log(`ðŸ“Š PERMITE_SALDO_NEGATIVO = ${permiteSaldoNegativo} (empresa ${empresaId})`);
-  
-  // âœ… SE PERMITE SALDO NEGATIVO, NÃƒO VALIDAR ESTOQUE
-  if (permiteSaldoNegativo === 'S') {
-    console.log('âœ… Saldo negativo permitido - pulando validaÃ§Ã£o de estoque');
-    return; // NÃ£o valida!
+const validarEstoque = async (schemaName, empresaId, itens) => {
+  let permiteSaldoNegativo = "N";
+
+  try {
+    const parametroQuery = `
+      SELECT COALESCE(pv.valor, pd.valor_padrao) as valor
+      FROM public.parametros_definicoes pd
+      LEFT JOIN parametros_valores pv
+        ON pv.id_parametro = pd.id_parametro
+        AND pv.id_empresa = $1
+      WHERE pd.codigo = 'PERMITE_SALDO_NEGATIVO'
+    `;
+    const parametroResult = await querySchema(schemaName, parametroQuery, [empresaId]);
+    permiteSaldoNegativo = parametroResult.rows[0]?.valor || "N";
+  } catch (err) {
+    console.warn("Nao foi possivel consultar PERMITE_SALDO_NEGATIVO, assumindo N:", err.message);
   }
-  
-  // âœ… SE NÃƒO PERMITE, VALIDAR NORMALMENTE
-  console.log('ðŸ”’ Validando estoque (nÃ£o permite saldo negativo)...');
-  
+
+  if (permiteSaldoNegativo === `S`) {
+    return;
+  }
+
   for (const item of itens) {
     const sql = `
       SELECT saldo
       FROM produtos
       WHERE id_empresa = $1 AND id_produto = $2
     `;
-    
-    const result = await query(sql, [empresaId, item.id_produto]);
+
+    const result = await querySchema(schemaName, sql, [empresaId, item.id_produto]);
     
     if (result.rows.length === 0) {
       throw new Error(`Produto ${item.descricao} nÃ£o encontrado`);
@@ -456,13 +453,13 @@ export const finalizarPedido = async (req, res) => {
 
   // Validar estoque (fora da transação, usa query normal)
   try {
-    await validarEstoque(empresaId, itens);
+    await validarEstoque(req.empresa.schema, empresaId, itens);
   } catch (error) {
     return res.status(400).json({ success: false, message: error.message });
   }
 
   // Buscar dados do cliente (fora da transação)
-  const clienteData = await query(
+  const clienteData = await querySchema(req.empresa.schema, 
     `SELECT razao_social,
             CASE WHEN tipo = 'J' THEN cnpj ELSE cpf END as documento
      FROM clientes WHERE id_cliente = $1`,
@@ -473,7 +470,7 @@ export const finalizarPedido = async (req, res) => {
   }
 
   // ✅ Obter client dedicado com timeout de segurança
-  const client = await getClient();
+  const client = await getClientForSchema(req.empresa.schema);
 
   try {
     await client.query('BEGIN');
@@ -599,7 +596,7 @@ export const totaisFormasPagamento = async (req, res) => {
       ORDER BY total DESC
     `;
 
-    const result = await query(sql, params);
+    const result = await querySchema(req.empresa.schema, sql, params);
 
     res.json({ success: true, data: result.rows });
   } catch (error) {
@@ -676,7 +673,7 @@ export const listarPedidos = async (req, res) => {
     }
     
     const countSql = `SELECT COUNT(*) as total FROM pedidos_venda p WHERE ${whereClause}`;
-    const countResult = await query(countSql, params);
+    const countResult = await querySchema(req.empresa.schema, countSql, params);
     const total = parseInt(countResult.rows[0].total);
     const totalPages = Math.ceil(total / limit);
     
@@ -694,7 +691,7 @@ export const listarPedidos = async (req, res) => {
       LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
     `;
     
-    const result = await query(sql, [...params, limit, offset]);
+    const result = await querySchema(req.empresa.schema, sql, [...params, limit, offset]);
     
     res.json({
       success: true,
@@ -738,7 +735,7 @@ export const buscarPedido = async (req, res) => {
       WHERE p.id_empresa = $1 AND p.id_pedido_venda = $2
     `;
     
-    const pedidoResult = await query(pedidoSql, [empresaId, id]);
+    const pedidoResult = await querySchema(req.empresa.schema, pedidoSql, [empresaId, id]);
     
     if (pedidoResult.rows.length === 0) {
       return res.status(404).json({
@@ -754,7 +751,7 @@ export const buscarPedido = async (req, res) => {
       ORDER BY sequencia
     `;
     
-    const itensResult = await query(itensSql, [id]);
+    const itensResult = await querySchema(req.empresa.schema, itensSql, [id]);
     
     const pagamentosSql = `
       SELECT 
@@ -765,7 +762,7 @@ export const buscarPedido = async (req, res) => {
       WHERE pp.id_pedido_venda = $1
     `;
     
-    const pagamentosResult = await query(pagamentosSql, [id]);
+    const pagamentosResult = await querySchema(req.empresa.schema, pagamentosSql, [id]);
     
     const pedido = {
       ...pedidoResult.rows[0],

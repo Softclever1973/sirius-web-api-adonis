@@ -2,7 +2,7 @@
 // SIRIUS WEB API - Controller de Movimentacoes de Estoque
 // =====================================================
 
-import { query, getClient } from '../config/database.js';
+import { querySchema, getClientForSchema } from '../config/database.js';
 
 // =====================================================
 // LISTAR MOVIMENTACOES (com paginacao)
@@ -21,7 +21,7 @@ export const listarMovimentacoes = async (req, res) => {
     const orderDir = req.query.orderDir === 'desc' ? 'DESC' : 'ASC';
     
     // Verificar se produto existe e pertence a empresa
-    const produtoExiste = await query(
+    const produtoExiste = await querySchema(req.empresa.schema, 
       'SELECT id_produto, descricao, saldo FROM produtos WHERE id_produto = $1 AND id_empresa = $2',
       [produtoId, empresaId]
     );
@@ -42,7 +42,7 @@ export const listarMovimentacoes = async (req, res) => {
       WHERE id_empresa = $1 AND id_produto = $2
     `;
     
-    const countResult = await query(countQuery, [empresaId, produtoId]);
+    const countResult = await querySchema(req.empresa.schema, countQuery, [empresaId, produtoId]);
     const total = parseInt(countResult.rows[0].total);
     
     // Query de dados
@@ -66,7 +66,7 @@ export const listarMovimentacoes = async (req, res) => {
       LIMIT $3 OFFSET $4
     `;
     
-    const dataResult = await query(dataQuery, [empresaId, produtoId, limit, offset]);
+    const dataResult = await querySchema(req.empresa.schema, dataQuery, [empresaId, produtoId, limit, offset]);
     
     // Calcular metadados de paginacao
     const totalPages = Math.ceil(total / limit);
@@ -116,7 +116,7 @@ export const listarMovimentacoes = async (req, res) => {
 // CRIAR MOVIMENTACAO (Entrada ou Saida)
 // =====================================================
 export const criarMovimentacao = async (req, res) => {
-  const client = await getClient();
+  const client = await getClientForSchema(req.empresa.schema);
   
   try {
     const empresaId = req.empresa.id;

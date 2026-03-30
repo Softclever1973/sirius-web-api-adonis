@@ -2,7 +2,7 @@
 // Controller de Vendedores
 // =====================================================
 
-import { query } from '../config/database.js';
+import { query,querySchema } from '../config/database.js';
 import bcrypt from 'bcryptjs';
 import { registrarLog } from '../services/audit-service.js';
 
@@ -36,7 +36,7 @@ export const listarVendedores = async (req, res) => {
       });
     }
     
-    const result = await query(
+    const result = await querySchema(req.empresa.schema, 
       `SELECT
         v.id_vendedor,
         v.id_empresa,
@@ -99,7 +99,7 @@ export const buscarVendedor = async (req, res) => {
       });
     }
     
-    const result = await query(
+    const result = await querySchema(req.empresa.schema, 
       `SELECT 
         id_vendedor,
         id_empresa,
@@ -218,6 +218,7 @@ export const criarVendedor = async (req, res) => {
     console.log('✅ Validações OK. Criando usuário e vendedor com id_empresa:', idEmpresa);
 
     // Criar usuário primeiro para obter o id_usuario
+    // usuarios e usuario_empresa ficam no public schema
     const userResult = await query(
       `INSERT INTO usuarios (nome, sobrenome, email, senha_hash, celular, status, is_super_admin)
        VALUES ($1, $2, $3, $4, $5, 'A', false)
@@ -233,7 +234,8 @@ export const criarVendedor = async (req, res) => {
     );
 
     // Inserir vendedor com o id_usuario já vinculado
-    const result = await query(
+    // senha_hash fica em public.usuarios, não em vendedores
+    const result = await querySchema(req.empresa.schema,
       `INSERT INTO vendedores (
         id_empresa,
         id_user,
@@ -249,9 +251,8 @@ export const criarVendedor = async (req, res) => {
         comissao,
         meta_vendas,
         observacoes,
-        status,
-        senha_hash
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *`,
       [
         idEmpresa,
@@ -268,8 +269,7 @@ export const criarVendedor = async (req, res) => {
         comissao,
         meta_vendas,
         observacoes,
-        status || 'A',
-        senhaHash
+        status || 'A'
       ]
     );
 
@@ -347,14 +347,14 @@ export const atualizarVendedor = async (req, res) => {
     }
 
     // Buscar dados anteriores para o log
-    const vendedorAtual = await query(
+    const vendedorAtual = await querySchema(req.empresa.schema, 
       'SELECT id_vendedor, nome, email, fone, status FROM vendedores WHERE id_vendedor = $1 AND id_empresa = $2',
       [id, idEmpresa]
     );
     const dadosAnterioresVendedor = vendedorAtual.rows[0] || null;
 
     // Atualizar vendedor
-    const result = await query(
+    const result = await querySchema(req.empresa.schema, 
       `UPDATE vendedores SET
         nome = $1,
         cpf = $2,
@@ -390,7 +390,7 @@ export const atualizarVendedor = async (req, res) => {
         idEmpresa
       ]
     );
-    const result2 = await query(`UPDATE usuario_empresa SET is_admin = $1, ativo = $2 WHERE id_usuario = $3`, [isAdmin, status === 'A' ? true : false, result.rows[0].id_user])
+    const result2 = await querySchema(req.empresa.schema, `UPDATE usuario_empresa SET is_admin = $1, ativo = $2 WHERE id_usuario = $3`, [isAdmin, status === 'A' ? true : false, result.rows[0].id_user])
     
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -446,7 +446,7 @@ export const excluirVendedor = async (req, res) => {
       });
     }
     
-    const vendedor = await query(
+    const vendedor = await querySchema(req.empresa.schema, 
       `SELECT v.id_vendedor, v.nome, v.email, v.fone, v.status, v.id_user, ue.is_admin
        FROM vendedores v
        LEFT JOIN usuario_empresa ue ON ue.id_usuario = v.id_user AND ue.id_empresa = $2
@@ -470,7 +470,7 @@ export const excluirVendedor = async (req, res) => {
 
     const idUser = vendedor.rows[0].id_user;
     
-    const result = await query(
+    const result = await querySchema(req.empresa.schema, 
       `DELETE FROM vendedores 
        WHERE id_vendedor = $1 AND id_empresa = $2
        RETURNING id_vendedor`,
@@ -478,7 +478,7 @@ export const excluirVendedor = async (req, res) => {
     );
     
     if (idUser){
-      await query(`DELETE FROM usuarios WHERE id_usuario = $1`, [idUser]);
+      await querySchema(req.empresa.schema, `DELETE FROM usuarios WHERE id_usuario = $1`, [idUser]);
     }
 
     registrarLog({

@@ -2,7 +2,7 @@
 // SIRIUS WEB API - Controller de Logs de Auditoria
 // =====================================================
 
-import { query } from '../config/database.js';
+import { query,querySchema } from '../config/database.js';
 
 /**
  * GET /logs
@@ -54,14 +54,14 @@ export const listarLogs = async (req, res) => {
 
     const where = conditions.join(' AND ');
 
-    const countResult = await query(
+    const countResult = await querySchema(req.empresa.schema, 
       `SELECT COUNT(*) AS total FROM logs_auditoria WHERE ${where}`,
       params
     );
     const total      = parseInt(countResult.rows[0].total);
     const totalPages = Math.ceil(total / limit);
 
-    const dataResult = await query(
+    const dataResult = await querySchema(req.empresa.schema, 
       `SELECT
          id_log,
          id_usuario,
