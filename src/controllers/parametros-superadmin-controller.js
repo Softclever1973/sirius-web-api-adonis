@@ -160,7 +160,7 @@ export const salvarValorEmpresa = async (req, res) => {
 
     // parametros_definicoes é em public — query normal
     const paramSql = `
-      SELECT id_parametro, codigo, tipo, opcoes
+      SELECT id_parametro, codigo, tipo, opcoes, valor_padrao
       FROM public.parametros_definicoes
       WHERE id_parametro = $1 AND ativo = true
     `;
@@ -188,6 +188,18 @@ export const salvarValorEmpresa = async (req, res) => {
       ? querySchema(schemaName, sql, params)
       : query(sql, params);
 
+    // Se o valor salvo for igual ao padrão, remover customização
+    if (String(valorValidado.valor) === String(parametro.valor_padrao)) {
+      await exec(
+        'DELETE FROM parametros_valores WHERE id_empresa = $1 AND id_parametro = $2',
+        [id_empresa, id_parametro]
+      );
+      return res.json({
+        success: true,
+        message: 'Valor igual ao padrão — customização removida'
+      });
+    }
+
     const checkResult = await exec(
       'SELECT id FROM parametros_valores WHERE id_empresa = $1 AND id_parametro = $2',
       [id_empresa, id_parametro]
@@ -211,7 +223,7 @@ export const salvarValorEmpresa = async (req, res) => {
         [id_empresa, id_parametro, valorValidado.valor, userId]
       );
     }
-    
+
     res.json({
       success: true,
       message: 'Valor salvo com sucesso',
@@ -233,14 +245,19 @@ export const salvarValorEmpresa = async (req, res) => {
 export const resetarValorEmpresa = async (req, res) => {
   try {
     const { id_empresa, id_parametro } = req.params;
-    
+
+    const schemaName = await getSchemaName(id_empresa);
+    const exec = (sql, params) => schemaName
+      ? querySchema(schemaName, sql, params)
+      : query(sql, params);
+
     const sql = `
-      DELETE FROM parametros_valores 
+      DELETE FROM parametros_valores
       WHERE id_empresa = $1 AND id_parametro = $2
       RETURNING *
     `;
-    
-    const result = await query(sql, [id_empresa, id_parametro]);
+
+    const result = await exec(sql, [id_empresa, id_parametro]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({
