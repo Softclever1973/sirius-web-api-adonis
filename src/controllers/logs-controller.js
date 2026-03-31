@@ -2,7 +2,7 @@
 // SIRIUS WEB API - Controller de Logs de Auditoria
 // =====================================================
 
-import { query,querySchema } from '../config/database.js';
+import { query, querySchema } from '../config/database.js';
 
 /**
  * GET /logs
