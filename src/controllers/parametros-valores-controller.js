@@ -3,7 +3,8 @@
 // Gerencia os valores configurados POR EMPRESA
 // =====================================================
 
-import { query,querySchema } from '../config/database.js';
+import { query, querySchema } from '../config/database.js';
+import { registrarLog } from '../services/audit-service.js';
 
 // =====================================================
 // LISTAR PARÂMETROS COM VALORES DA EMPRESA
@@ -143,8 +144,8 @@ export const salvarValor = async (req, res) => {
     
     // Verificar se parâmetro existe
     const paramSql = `
-      SELECT id_parametro, codigo, tipo, opcoes 
-      FROM parametros_definicoes 
+      SELECT id_parametro, codigo, descricao, tipo, opcoes
+      FROM parametros_definicoes
       WHERE id_parametro = $1 AND ativo = true
     `;
     const paramResult = await querySchema(req.empresa.schema, paramSql, [id_parametro]);
@@ -175,7 +176,8 @@ export const salvarValor = async (req, res) => {
     const checkResult = await querySchema(req.empresa.schema, checkSql, [empresaId, id_parametro]);
     
     let result;
-    
+    let acao;
+
     if (checkResult.rows.length > 0) {
       // Atualizar
       const updateSql = `
@@ -185,6 +187,7 @@ export const salvarValor = async (req, res) => {
         RETURNING *
       `;
       result = await querySchema(req.empresa.schema, updateSql, [valorValidado.valor, userId, empresaId, id_parametro]);
+      acao = 'ALTEROU';
     } else {
       // Inserir
       const insertSql = `
@@ -193,8 +196,18 @@ export const salvarValor = async (req, res) => {
         RETURNING *
       `;
       result = await querySchema(req.empresa.schema, insertSql, [empresaId, id_parametro, valorValidado.valor, userId]);
+      acao = 'CRIOU';
     }
-    
+
+    await registrarLog({
+      req,
+      acao,
+      modulo: 'Parâmetros',
+      id_registro: parametro.id_parametro,
+      descricao: `${acao === 'CRIOU' ? 'Definiu' : 'Alterou'} o parâmetro "${parametro.descricao || parametro.codigo}" para "${valorValidado.valor}"`,
+      dados_novos: { codigo: parametro.codigo, valor: valorValidado.valor }
+    });
+
     res.json({
       success: true,
       message: 'Valor salvo com sucesso',
@@ -290,22 +303,37 @@ export const resetarValor = async (req, res) => {
   try {
     const empresaId = req.empresa.id;
     const { id_parametro } = req.params;
-    
+
+    // Buscar nome do parâmetro para o log
+    const paramResult = await querySchema(req.empresa.schema,
+      'SELECT codigo, descricao FROM parametros_definicoes WHERE id_parametro = $1',
+      [id_parametro]
+    );
+    const parametro = paramResult.rows[0];
+
     const sql = `
-      DELETE FROM parametros_valores 
+      DELETE FROM parametros_valores
       WHERE id_empresa = $1 AND id_parametro = $2
       RETURNING *
     `;
-    
+
     const result = await querySchema(req.empresa.schema, sql, [empresaId, id_parametro]);
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Valor não encontrado (já está no padrão)'
       });
     }
-    
+
+    await registrarLog({
+      req,
+      acao: 'ALTEROU',
+      modulo: 'Parâmetros',
+      id_registro: id_parametro,
+      descricao: `Resetou o parâmetro "${parametro?.descricao || parametro?.codigo || id_parametro}" para o valor padrão`
+    });
+
     res.json({
       success: true,
       message: 'Valor resetado para o padrão'

@@ -4,6 +4,7 @@
 // =====================================================
 
 import { query, querySchema } from '../config/database.js';
+import { registrarLog } from '../services/audit-service.js';
 
 // Busca o schema_name de uma empresa pelo id
 const getSchemaName = async (id_empresa) => {
@@ -160,7 +161,7 @@ export const salvarValorEmpresa = async (req, res) => {
 
     // parametros_definicoes é em public — query normal
     const paramSql = `
-      SELECT id_parametro, codigo, tipo, opcoes, valor_padrao
+      SELECT id_parametro, codigo, descricao, tipo, opcoes, valor_padrao
       FROM public.parametros_definicoes
       WHERE id_parametro = $1 AND ativo = true
     `;
@@ -188,12 +189,22 @@ export const salvarValorEmpresa = async (req, res) => {
       ? querySchema(schemaName, sql, params)
       : query(sql, params);
 
+    // Montar req.empresa para o audit-service (não há tenant middleware aqui)
+    req.empresa = { id: parseInt(id_empresa), schema: schemaName };
+
     // Se o valor salvo for igual ao padrão, remover customização
     if (String(valorValidado.valor) === String(parametro.valor_padrao)) {
       await exec(
         'DELETE FROM parametros_valores WHERE id_empresa = $1 AND id_parametro = $2',
         [id_empresa, id_parametro]
       );
+      await registrarLog({
+        req,
+        acao: 'ALTEROU',
+        modulo: 'Parâmetros',
+        id_registro: parametro.id_parametro,
+        descricao: `Resetou o parâmetro "${parametro.descricao || parametro.codigo}" para o valor padrão`
+      });
       return res.json({
         success: true,
         message: 'Valor igual ao padrão — customização removida'
@@ -206,6 +217,7 @@ export const salvarValorEmpresa = async (req, res) => {
     );
 
     let result;
+    let acao;
 
     if (checkResult.rows.length > 0) {
       result = await exec(
@@ -215,6 +227,7 @@ export const salvarValorEmpresa = async (req, res) => {
          RETURNING *`,
         [valorValidado.valor, userId, id_empresa, id_parametro]
       );
+      acao = 'ALTEROU';
     } else {
       result = await exec(
         `INSERT INTO parametros_valores (id_empresa, id_parametro, valor, updated_by)
@@ -222,7 +235,17 @@ export const salvarValorEmpresa = async (req, res) => {
          RETURNING *`,
         [id_empresa, id_parametro, valorValidado.valor, userId]
       );
+      acao = 'CRIOU';
     }
+
+    await registrarLog({
+      req,
+      acao,
+      modulo: 'Parâmetros',
+      id_registro: parametro.id_parametro,
+      descricao: `${acao === 'CRIOU' ? 'Definiu' : 'Alterou'} o parâmetro "${parametro.descricao || parametro.codigo}" para "${valorValidado.valor}"`,
+      dados_novos: { codigo: parametro.codigo, valor: valorValidado.valor }
+    });
 
     res.json({
       success: true,
@@ -251,6 +274,13 @@ export const resetarValorEmpresa = async (req, res) => {
       ? querySchema(schemaName, sql, params)
       : query(sql, params);
 
+    // Buscar nome do parâmetro para o log
+    const paramResult = await query(
+      'SELECT codigo, descricao FROM public.parametros_definicoes WHERE id_parametro = $1',
+      [id_parametro]
+    );
+    const parametro = paramResult.rows[0];
+
     const sql = `
       DELETE FROM parametros_valores
       WHERE id_empresa = $1 AND id_parametro = $2
@@ -258,14 +288,23 @@ export const resetarValorEmpresa = async (req, res) => {
     `;
 
     const result = await exec(sql, [id_empresa, id_parametro]);
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Valor não encontrado (já está no padrão)'
       });
     }
-    
+
+    req.empresa = { id: parseInt(id_empresa), schema: schemaName };
+    await registrarLog({
+      req,
+      acao: 'ALTEROU',
+      modulo: 'Parâmetros',
+      id_registro: id_parametro,
+      descricao: `Resetou o parâmetro "${parametro?.descricao || parametro?.codigo || id_parametro}" para o valor padrão`
+    });
+
     res.json({
       success: true,
       message: 'Valor resetado para o padrão'
