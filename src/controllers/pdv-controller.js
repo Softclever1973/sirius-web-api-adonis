@@ -427,7 +427,7 @@ export const finalizarPedido = async (req, res) => {
   } = req.body;
 
   // Validações (fora da transação)
-  if (!cliente || !cliente.id) {
+  if (!cliente || cliente.id === null || cliente.id === undefined) {
     return res.status(400).json({ success: false, message: 'Cliente não informado' });
   }
   if (!itens || itens.length === 0) {
@@ -459,14 +459,20 @@ export const finalizarPedido = async (req, res) => {
   }
 
   // Buscar dados do cliente (fora da transação)
-  const clienteData = await querySchema(req.empresa.schema, 
-    `SELECT razao_social,
-            CASE WHEN tipo = 'J' THEN cnpj ELSE cpf END as documento
-     FROM clientes WHERE id_cliente = $1`,
-    [cliente.id]
-  );
-  if (clienteData.rows.length === 0) {
-    return res.status(400).json({ success: false, message: 'Cliente não encontrado' });
+  let clienteInfo;
+  if (cliente.id === 0) {
+    clienteInfo = { razao_social: 'Consumidor Final', documento: '' };
+  } else {
+    const clienteData = await querySchema(req.empresa.schema,
+      `SELECT razao_social,
+              CASE WHEN tipo = 'J' THEN cnpj ELSE cpf END as documento
+       FROM clientes WHERE id_cliente = $1`,
+      [cliente.id]
+    );
+    if (clienteData.rows.length === 0) {
+      return res.status(400).json({ success: false, message: 'Cliente não encontrado' });
+    }
+    clienteInfo = clienteData.rows[0];
   }
 
   // ✅ Obter client dedicado com timeout de segurança
@@ -484,9 +490,9 @@ export const finalizarPedido = async (req, res) => {
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'F',$11,NOW())
       RETURNING id_pedido_venda`,
       [
-        empresaId, numero, cliente.id,
-        clienteData.rows[0].razao_social,
-        clienteData.rows[0].documento,
+        empresaId, numero, cliente.id || null,
+        clienteInfo.razao_social,
+        clienteInfo.documento,
         usuarioId, valor_bruto,
         desconto || 0, acrescimo || 0, valor_liquido,
         observacoes || null
